@@ -1,0 +1,502 @@
+:root {
+  /* Base palette (AppliedAI / Opus brand) */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #efefef; /* recessed surfaces: inputs, code blocks, disabled states */
+  --color-border: #efefef;
+
+  --color-text: #181818; /* headings, primary text */
+  --color-text-secondary: #373737; /* body copy */
+  --color-text-muted: #959595; /* captions, hints, micro-labels */
+
+  /* Accent colors - use sparingly: whole phrases/labels or fill backgrounds
+     only, never to color a single word inside body text. */
+  --color-green: #57d873; /* positive / approved */
+  --color-blue: #387bf0; /* interactive elements and links only */
+  --color-yellow: #f7e85a; /* pending / caution */
+  --color-pink: #ef72e7; /* negative / flagged (brand has no red) */
+
+  --color-blue-tint: #eaf1fb;
+  --color-pink-tint: #fdeefc;
+
+  /* Heading color + primary-button gradient - additive on top of the base
+     brand tokens above, which stay as-is (still drive badges/profile card). */
+  --color-heading: #4c1d95;
+  --color-btn-primary-start: #e08a2c;
+  --color-btn-primary-end: #7a2048;
+
+  --shadow-card: 0 2px 6px rgba(24, 24, 24, 0.1), 0 10px 26px rgba(24, 24, 24, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+}
+
+h1, h2, h3,
+.card-title,
+.brand-title {
+  font-family: "Prompt", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  color: var(--color-heading);
+}
+
+img {
+  max-width: 100%;
+}
+
+/* ---------- Header ---------- */
+
+.app-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 1rem 1.5rem;
+}
+
+.brand {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.brand-logo {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-logo img {
+  display: block;
+  height: 24px;
+  width: auto;
+  max-width: 100%;
+}
+
+.brand-text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.brand-title {
+  font-size: 1.05rem;
+}
+
+.brand-sep {
+  color: var(--color-border);
+}
+
+.brand-subtitle {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Layout ---------- */
+
+.content {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  padding: 1.75rem;
+}
+
+.card-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.subtitle {
+  margin: 0 0 1.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.92rem;
+}
+
+.page-footer {
+  padding: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.page-footer strong {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.powered-by {
+  margin: 0;
+  padding: 0.75rem 0 2rem;
+  text-align: center;
+}
+
+.powered-by-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+.powered-by-badge img {
+  display: block;
+  height: 24px;
+  width: auto;
+  max-width: 100%;
+}
+
+/* ---------- Form ---------- */
+
+.field {
+  margin-bottom: 1.4rem;
+}
+
+label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  margin-bottom: 0.35rem;
+}
+
+.hint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+input[type="file"],
+textarea {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+textarea {
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+textarea:focus,
+input:focus {
+  outline: none;
+  border-color: var(--color-blue);
+  box-shadow: 0 0 0 4px rgba(56, 123, 240, 0.32);
+}
+
+/* ---------- Buttons ---------- */
+/* Every button is solid blue by default (interactive accent, per brand
+   guidelines) EXCEPT the single primary "commit" action (#submit-btn),
+   which gets the orange-to-maroon gradient below - see .btn-secondary /
+   "Run Another", which stays plain .btn (solid blue). */
+
+.btn {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  border: none;
+  border-radius: 10px;
+  font-family: "Open Sans", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.8rem 1.25rem;
+  background: var(--color-blue);
+  color: #ffffff;
+  transition: filter 0.15s ease;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  filter: none;
+}
+
+#submit-btn:not(:disabled) {
+  background: linear-gradient(90deg, var(--color-btn-primary-start), var(--color-btn-primary-end));
+}
+
+.btn-secondary {
+  margin-top: 1.25rem;
+}
+
+.btn-caption {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* ---------- Alerts / banners ---------- */
+
+.error-banner {
+  background: var(--color-pink-tint);
+  border-left: 3px solid var(--color-pink);
+  color: var(--color-text);
+  padding: 0.7rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--color-surface-muted);
+  border-radius: 12px;
+}
+
+/* An author-stylesheet `display` rule beats the UA [hidden]{display:none}
+   rule even at equal specificity, so the explicit display: flex above would
+   otherwise keep this panel visible whenever JS sets `.hidden = true`. */
+.status-banner[hidden] {
+  display: none;
+}
+
+.spinner {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ffffff;
+  border-top-color: var(--color-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#status-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- Error card ---------- */
+
+.error-card {
+  border-left: 4px solid var(--color-pink);
+}
+
+.error-card .badge {
+  margin-bottom: 0.75rem;
+}
+
+.error-card ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.error-card li {
+  margin-bottom: 0.25rem;
+}
+
+/* ---------- Results card ---------- */
+
+.result-headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.routing-flag-group {
+  text-align: right;
+}
+
+.result-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+/* Small-caps gray label above a bold value - same pattern used for
+   Final Decision / Routing Flag above and for the section headings below. */
+.result-section h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin: 0 0 0.4rem;
+  font-family: "Open Sans", sans-serif;
+}
+
+.result-section {
+  margin-bottom: 1.25rem;
+}
+
+/* Status pill/badge - a solid accent fill covering the whole phrase, per
+   brand guidance (never color a single word, only whole labels/fills).
+   Tone is applied dynamically via a tone-* class (see setBadgeTone() /
+   JOB_STATUS_TONE in app.js) so new values just need a new rule there,
+   not new CSS. */
+.badge {
+  display: inline-block;
+  font-family: "Open Sans", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border-radius: 999px;
+  padding: 0.42rem 0.95rem;
+  font-size: 0.85rem;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.badge-lg {
+  font-size: 1.5rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: 14px;
+}
+
+.badge.tone-green {
+  background: var(--color-green);
+  color: #181818;
+}
+
+.badge.tone-pink {
+  background: var(--color-pink);
+  color: #181818;
+}
+
+.badge.tone-yellow {
+  background: var(--color-yellow);
+  color: #181818;
+}
+
+.badge.tone-blue {
+  background: var(--color-blue);
+  color: #ffffff;
+}
+
+.badge.tone-neutral {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.audit-summary {
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  background: var(--color-surface-muted);
+  border-radius: 10px;
+  padding: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+  background: var(--color-surface-muted);
+  border-radius: 10px;
+  padding: 0.9rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-text-secondary);
+}
+
+details summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-blue);
+}
+
+/* ---------- Case file profile card ---------- */
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--color-blue) 0%, var(--color-pink) 100%);
+  color: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.profile-card-avatar {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Prompt", sans-serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #ffffff;
+}
+
+.profile-card-body {
+  min-width: 0;
+}
+
+.profile-card-name {
+  font-family: "Prompt", sans-serif;
+  font-weight: 500;
+  font-size: 1.1rem;
+  margin: 0 0 0.15rem;
+}
+
+.profile-card-subtitle {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 0.65rem;
+}
+
+.profile-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.profile-card-tag {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.case-file-json {
+  margin-top: 0.9rem;
+}
