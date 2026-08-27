@@ -58,8 +58,25 @@
     </section>
 
     <div id="status-panel" class="status-banner" hidden>
-      <div class="spinner"></div>
-      <div id="status-text">Processing…</div>
+      <div class="status-top">
+        <div class="spinner"></div>
+        <div class="status-top-text">
+          <div id="status-text">Processing…</div>
+          <div id="status-elapsed" class="status-elapsed"></div>
+        </div>
+      </div>
+
+      <div id="status-progress" class="status-progress" hidden>
+        <div class="status-progress-header">
+          <span class="status-heading">Workflow Progress</span>
+          <span id="status-steps-count" class="status-steps-count"></span>
+        </div>
+        <div class="progress-track">
+          <div id="progress-bar-fill" class="progress-bar-fill"></div>
+          <div id="progress-bar-running" class="progress-bar-running" hidden></div>
+        </div>
+        <div id="status-step-pills" class="status-step-pills"></div>
+      </div>
     </div>
 
     <section id="error-panel" class="card error-card" hidden>

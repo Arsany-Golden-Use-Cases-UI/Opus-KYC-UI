@@ -226,8 +226,28 @@ app.get('/api/run/:id', async (req, res) => {
       });
     }
 
-    // PENDING, IN_PROGRESS, WAITING, UNKNOWN - keep polling.
-    res.json({ status });
+    // PENDING, IN_PROGRESS, WAITING, UNKNOWN - keep polling. Also surface
+    // live step progress from the audit endpoint (API reference §4.7 - not
+    // documented as failure-only: nb_nodes/executed_nodes/nb_executed_nodes
+    // are populated for in-progress runs too). Best-effort: if this call
+    // fails, still return the bare status like before rather than a 500.
+    const progress = {};
+    try {
+      const auditRes = await opusFetch(`/job/${jobId}/audit`);
+      const audit = await auditRes.json();
+      progress.nbNodes = audit.nb_nodes;
+      progress.executedNodes = audit.executed_nodes || [];
+      progress.nbExecutedNodes = audit.nb_executed_nodes;
+      // The node currently in flight (API reference §4.7). null while
+      // between nodes / before the first one has picked up.
+      progress.runningNode = audit.running_node || null;
+      progress.nextNodeToExecute = audit.next_node_to_execute || null;
+      progress.remainingNodes = audit.remaining_nodes_to_execute || [];
+    } catch (auditErr) {
+      console.error('progress audit fetch error', auditErr);
+    }
+
+    res.json({ status, ...progress });
   } catch (err) {
     console.error('poll error', err);
     res.status(500).json({ error: err.message || 'Failed to check job status.' });

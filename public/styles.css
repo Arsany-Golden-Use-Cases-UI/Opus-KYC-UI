@@ -266,8 +266,8 @@ input:focus {
 
 .status-banner {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.9rem;
   padding: 1rem 1.25rem;
   background: var(--color-surface-muted);
   border-radius: 12px;
@@ -278,6 +278,23 @@ input:focus {
    otherwise keep this panel visible whenever JS sets `.hidden = true`. */
 .status-banner[hidden] {
   display: none;
+}
+
+.status-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-top-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.status-elapsed {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
 }
 
 .spinner {
@@ -298,6 +315,121 @@ input:focus {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-text-secondary);
+}
+
+.status-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Same author-vs-UA-stylesheet [hidden] issue as .status-banner above. */
+.status-progress[hidden] {
+  display: none;
+}
+
+.status-progress-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.status-heading {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.status-steps-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  display: flex;
+  align-items: stretch;
+  /* The track sits on the status banner's own --color-surface-muted
+     background, so it uses --color-surface (white) + a --color-border edge
+     for visible contrast - both are existing tokens, just applied so the
+     track doesn't disappear against its equally-muted parent. */
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--color-green);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* The currently-running node's slice of the track - sits right after the
+   completed fill, distinct color + pulse so "in progress" reads differently
+   from "done". Hidden entirely (not just width:0) whenever running_node is
+   null, e.g. between nodes or on a terminal status. */
+.progress-bar-running {
+  height: 100%;
+  width: 0%;
+  background: var(--color-yellow);
+  animation: progress-pulse 1.4s ease-in-out infinite;
+}
+
+.progress-bar-running[hidden] {
+  display: none;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.status-step-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.step-pill {
+  display: inline-block;
+  font-family: "Open Sans", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+/* Completed - solid green, matches the green/positive tone used elsewhere. */
+.step-pill--done {
+  background: var(--color-green);
+  border-color: var(--color-green);
+  color: #181818;
+}
+
+/* Currently running - yellow/pulsing, distinct from both done and pending so
+   the in-flight node is unmistakable at a glance (mirrors Opus's own
+   execution timeline UI, which marks the active node the same way). */
+.step-pill--running {
+  background: var(--color-yellow);
+  border-color: var(--color-yellow);
+  color: #181818;
+  animation: progress-pulse 1.4s ease-in-out infinite;
+}
+
+/* Not yet started - the pre-existing muted default, made explicit here so
+   it isn't accidentally dropped if .step-pill's own rule changes later. */
+.step-pill--pending {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
 }
 
 /* ---------- Error card ---------- */

@@ -3,6 +3,12 @@ const submitBtn = document.getElementById('submit-btn');
 const formError = document.getElementById('form-error');
 const statusPanel = document.getElementById('status-panel');
 const statusText = document.getElementById('status-text');
+const statusElapsed = document.getElementById('status-elapsed');
+const statusProgress = document.getElementById('status-progress');
+const statusStepsCount = document.getElementById('status-steps-count');
+const progressBarFill = document.getElementById('progress-bar-fill');
+const progressBarRunning = document.getElementById('progress-bar-running');
+const statusStepPills = document.getElementById('status-step-pills');
 const errorPanel = document.getElementById('error-panel');
 const errorStatus = document.getElementById('error-status');
 const errorNodes = document.getElementById('error-nodes');
@@ -50,6 +56,101 @@ function setBadgeTone(el, value) {
 }
 
 let pollTimer = null;
+let elapsedTimer = null;
+let pollStartTime = null;
+
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `Elapsed: ${minutes}m ${seconds}s`;
+}
+
+function startElapsedTimer() {
+  pollStartTime = Date.now();
+  statusElapsed.textContent = formatElapsed(0);
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(() => {
+    statusElapsed.textContent = formatElapsed(Date.now() - pollStartTime);
+  }, 1000);
+}
+
+function stopElapsedTimer() {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer);
+    elapsedTimer = null;
+  }
+}
+
+// Renders live step progress from the audit data the poll response carries
+// (nbNodes/executedNodes/nbExecutedNodes/runningNode/remainingNodes - see
+// server.js's GET /api/run/:id, which mirrors the Opus /job/{id}/audit
+// response). Falls back to hiding the progress block (leaving just the
+// status text/spinner) whenever nbNodes is missing or zero, e.g. before the
+// first audit call has resolved, or if it failed server-side.
+function renderProgress(data) {
+  const nbNodes = data.nbNodes;
+  const executedNodes = data.executedNodes || [];
+  const runningNode = data.runningNode || null;
+  // remaining_nodes_to_execute's own documented ordering already reflects
+  // what's left, so we just drop the running node out of it (some responses
+  // include it there too, some don't) rather than re-deriving order.
+  const remainingNodes = (data.remainingNodes || []).filter((name) => name !== runningNode);
+
+  if (!nbNodes) {
+    statusProgress.hidden = true;
+    statusText.textContent = 'Processing…';
+    return;
+  }
+
+  const completed = typeof data.nbExecutedNodes === 'number' ? data.nbExecutedNodes : executedNodes.length;
+
+  statusProgress.hidden = false;
+  statusText.textContent = runningNode ? `Running: ${runningNode}` : 'Processing…';
+  statusStepsCount.textContent = runningNode
+    ? `${completed} / ${nbNodes} steps — running: ${runningNode}`
+    : `${completed} / ${nbNodes} steps`;
+
+  // Fill reflects completed steps; the running node (if any) shows as a
+  // separate lighter/pulsing segment rather than counting as done.
+  const completedPct = Math.max(0, Math.min(100, (completed / nbNodes) * 100));
+  const runningPct = runningNode ? Math.max(0, Math.min(100 - completedPct, (1 / nbNodes) * 100)) : 0;
+  progressBarFill.style.width = `${completedPct}%`;
+  progressBarRunning.style.width = `${runningPct}%`;
+  progressBarRunning.hidden = !runningNode;
+
+  statusStepPills.innerHTML = '';
+
+  executedNodes.forEach((name) => {
+    const pill = document.createElement('span');
+    pill.className = 'step-pill step-pill--done';
+    pill.textContent = `✓ ${name}`;
+    statusStepPills.appendChild(pill);
+  });
+
+  if (runningNode) {
+    const pill = document.createElement('span');
+    pill.className = 'step-pill step-pill--running';
+    pill.textContent = runningNode;
+    statusStepPills.appendChild(pill);
+  }
+
+  remainingNodes.forEach((name) => {
+    const pill = document.createElement('span');
+    pill.className = 'step-pill step-pill--pending';
+    pill.textContent = name;
+    statusStepPills.appendChild(pill);
+  });
+}
+
+function resetProgress() {
+  statusProgress.hidden = true;
+  statusStepPills.innerHTML = '';
+  progressBarFill.style.width = '0%';
+  progressBarRunning.style.width = '0%';
+  progressBarRunning.hidden = true;
+  statusElapsed.textContent = '';
+}
 
 function showError(message) {
   formError.textContent = message;
@@ -115,6 +216,7 @@ form.addEventListener('submit', async (e) => {
   errorPanel.hidden = true;
   statusPanel.hidden = false;
   statusText.textContent = 'Uploading documents…';
+  resetProgress();
 
   try {
     const [idDocumentFileUrl, proofOfAddressFileUrl] = await Promise.all([
@@ -142,6 +244,8 @@ form.addEventListener('submit', async (e) => {
 });
 
 function pollStatus(jobId) {
+  startElapsedTimer();
+
   const poll = async () => {
     try {
       const res = await fetch(`/api/run/${jobId}`);
@@ -160,6 +264,7 @@ function pollStatus(jobId) {
         showFailure(data);
       } else {
         statusText.textContent = `Processing (${data.status})…`;
+        renderProgress(data);
       }
     } catch (err) {
       stopPolling();
@@ -178,6 +283,7 @@ function stopPolling() {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  stopElapsedTimer();
 }
 
 function showFailure(data) {

@@ -1,0 +1,9 @@
+{
+  "policyName": "Standard Retail KYC Screening",
+  "policyVersion": "1.0",
+  "riskTolerance": "standard",
+  "checks": ["sanctions", "pep", "adverseMedia"],
+  "watchlists": ["OFAC", "UN", "EU"],
+  "autoApproveThreshold": "low",
+  "manualReviewThreshold": "medium"
+}
