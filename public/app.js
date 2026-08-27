@@ -1,3 +1,12 @@
+const landingView = document.getElementById('landing-view');
+const appView = document.getElementById('app-view');
+const startBtn = document.getElementById('start-btn');
+
+startBtn.addEventListener('click', () => {
+  landingView.hidden = true;
+  appView.hidden = false;
+});
+
 const form = document.getElementById('kyc-form');
 const submitBtn = document.getElementById('submit-btn');
 const formError = document.getElementById('form-error');

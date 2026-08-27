@@ -103,6 +103,81 @@ img {
   color: var(--color-text-muted);
 }
 
+/* ---------- Landing / splash view ---------- */
+/* Shown first (see app.js); replaced by #app-view once "Run KYC Workflow"
+   is clicked. Full-viewport, centered, reuses the header's logo assets at
+   a larger size plus the same .btn.btn-primary gradient button as the
+   form's submit action - no new visual language, just a bigger front door. */
+
+.landing-view {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Same [hidden]-vs-author-stylesheet issue as #app-view below: without
+   this, clicking through would set landing-view's hidden attribute but
+   the plain .landing-view { display:flex } rule would keep it on screen,
+   stacked above the form. */
+.landing-view[hidden] {
+  display: none;
+}
+
+.landing-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.landing-logo {
+  display: block;
+  width: auto;
+  height: 32px;
+}
+
+.landing-title {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.landing-subtitle {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  max-width: 36ch;
+}
+
+.landing-btn {
+  width: auto;
+  display: inline-block;
+  padding: 0.9rem 2.5rem;
+}
+
+/* Layout for #app-view (header + .content) once past the landing view -
+   the header/.content elements inside it keep their own existing rules
+   unchanged; this just lets #app-view participate as a plain block.
+   The [hidden] rule is required: an author-stylesheet class selector like
+   plain .app-view beats the UA stylesheet's [hidden] { display:none },
+   so without this, #app-view stayed visible (stacked below the landing
+   view) even while its hidden attribute was set - same issue already
+   worked around for .status-progress[hidden] above. */
+.app-view {
+  display: block;
+}
+
+.app-view[hidden] {
+  display: none;
+}
+
 /* ---------- Layout ---------- */
 
 .content {
@@ -237,7 +312,7 @@ input:focus {
   filter: none;
 }
 
-#submit-btn:not(:disabled) {
+.btn-primary:not(:disabled) {
   background: linear-gradient(90deg, var(--color-btn-primary-start), var(--color-btn-primary-end));
 }
 
