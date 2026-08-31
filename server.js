@@ -59,8 +59,8 @@ const OUTPUT_VARS = {
 // output_data keys the off-platform callback (API reference section 9.2)
 // expects on the POST to callback.url.
 const REVIEW_OUTPUT_VARS = {
-  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_2sesd1xfb', // True/False
-  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_9ci0lorbf', // Text
+  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_d43knd8rq', // True/False
+  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_m7r06wbko', // Text
 };
 
 const FAILURE_STATUSES = ['FAILED', 'CANCELLED', 'TIMED_OUT'];
