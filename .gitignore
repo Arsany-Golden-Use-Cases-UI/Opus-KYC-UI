@@ -6,3 +6,6 @@ node_modules/
 *.docx
 ~$*
 *.log
+
+# Local case-run history (server.js) - runtime data, not source
+data/case-history.json

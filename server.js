@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -44,7 +45,102 @@ const OUTPUT_VARS = {
   caseFile: 'workflow_output_76olv4bsy',
 };
 
+// "KYC Human Review" node's two declared outputs - read off the workflow
+// builder canvas directly (2026-08-27), not discoverable through
+// GET /workflow/{id} in a way that's tied to this specific review step.
+// These are the outputData keys the in-platform review completion API
+// (API reference section 9.3) expects on POST /review/v2/{id}/complete.
+const REVIEW_OUTPUT_VARS = {
+  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_l2h62ayew', // True/False
+  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_64b27ng02', // Text
+};
+
 const FAILURE_STATUSES = ['FAILED', 'CANCELLED', 'TIMED_OUT'];
+
+// ---------------------------------------------------------------------
+// Case history (ADDED 2026-08-31)
+//
+// A simple local log of every case run through this app, backing the new
+// Case Queue / My Cases tabs with real data instead of invented mockup
+// numbers. Deliberately just a JSON file, not a database - this is a
+// single small dev instance.
+//
+// KNOWN LIMITATION: this will NOT persist on Vercel. Serverless functions
+// there don't share a writable, durable filesystem across invocations -
+// this file works for local (`npm start`) use only. A real deployment
+// with persistent history needs an actual database (e.g. a hosted
+// Postgres/Redis) swapped in behind loadHistory()/saveHistory() below.
+// ---------------------------------------------------------------------
+
+const HISTORY_FILE = path.join(__dirname, 'data', 'case-history.json');
+
+function loadHistory() {
+  try {
+    const raw = fs.readFileSync(HISTORY_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveHistory(entries) {
+  try {
+    fs.mkdirSync(path.dirname(HISTORY_FILE), { recursive: true });
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(entries, null, 2));
+  } catch (err) {
+    console.error('case history write error', err);
+  }
+}
+
+// Best-effort applicant name extraction from the raw Application Form JSON
+// string the client sent - shape varies by test data, so this tries a few
+// likely paths rather than assuming one schema, and never throws.
+function extractApplicantName(applicationFormJson) {
+  try {
+    const parsed = JSON.parse(applicationFormJson);
+    return (
+      parsed?.applicant?.full_name ||
+      parsed?.applicantName ||
+      parsed?.full_name ||
+      parsed?.applicant_name ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function addHistoryEntry(entry) {
+  const entries = loadHistory();
+  entries.push(entry);
+  saveHistory(entries);
+}
+
+function updateHistoryEntry(jobId, updates) {
+  const entries = loadHistory();
+  const idx = entries.findIndex((e) => e.jobId === jobId);
+  if (idx === -1) return;
+  entries[idx] = { ...entries[idx], ...updates };
+  saveHistory(entries);
+}
+
+app.get('/api/case-history', (req, res) => {
+  const entries = loadHistory().sort(
+    (a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)
+  );
+  res.json({ entries });
+});
+
+// Real (non-secret) connection info for the Settings tab - never the
+// service key itself, just whether one is set.
+app.get('/api/config', (req, res) => {
+  res.json({
+    host: OPUS_BASE_URL,
+    workflowId: OPUS_WORKFLOW_ID,
+    serviceKeyConfigured: Boolean(OPUS_SERVICE_KEY),
+  });
+});
 
 // Thin wrapper around fetch() for calls to the Opus API: attaches auth, retries
 // 429/5xx with backoff (per the API reference, section 11), and throws on other errors.
@@ -186,6 +282,24 @@ app.post('/api/run', async (req, res) => {
       }),
     });
 
+    // Log to case history right away (IN_PROGRESS) so it shows up in the
+    // Case Queue immediately, not just once it finishes - best-effort,
+    // never lets a logging problem fail the actual job start.
+    try {
+      addHistoryEntry({
+        jobId: jobExecutionId,
+        title: title || 'Banking KYC run',
+        applicantName: extractApplicantName(applicationFormJson),
+        submittedAt: new Date().toISOString(),
+        status: 'IN_PROGRESS',
+        finalDecision: null,
+        routingFlag: null,
+        completedAt: null,
+      });
+    } catch (historyErr) {
+      console.error('case history log error', historyErr);
+    }
+
     // success:true here only means the request was accepted, not that the run
     // will succeed (API reference section 4.4) - the browser must poll status/audit.
     res.json({ jobExecutionId });
@@ -211,12 +325,29 @@ app.get('/api/run/:id', async (req, res) => {
         outputs[key] = jobResultsPayloadSchema?.[varName]?.value ?? null;
       }
 
+      try {
+        updateHistoryEntry(jobId, {
+          status,
+          finalDecision: outputs.finalDecision ?? null,
+          routingFlag: outputs.routingFlag ?? null,
+          completedAt: new Date().toISOString(),
+        });
+      } catch (historyErr) {
+        console.error('case history update error', historyErr);
+      }
+
       return res.json({ status, outputs });
     }
 
     if (FAILURE_STATUSES.includes(status)) {
       const auditRes = await opusFetch(`/job/${jobId}/audit`);
       const audit = await auditRes.json();
+
+      try {
+        updateHistoryEntry(jobId, { status, completedAt: new Date().toISOString() });
+      } catch (historyErr) {
+        console.error('case history update error', historyErr);
+      }
 
       return res.json({
         status,
@@ -251,6 +382,160 @@ app.get('/api/run/:id', async (req, res) => {
   } catch (err) {
     console.error('poll error', err);
     res.status(500).json({ error: err.message || 'Failed to check job status.' });
+  }
+});
+
+// ---------------------------------------------------------------------
+// Off-platform Human Review (API reference section 9.2)
+//
+// SWITCHED 2026-08-27 from the in-platform review API (section 9.3, see
+// git history for that implementation). That approach required us to
+// *poll and guess* which of the workspace's DISPATCHED reviews belonged to
+// our job - even with a job-start lower bound, it was still fundamentally
+// a best-effort match, and a submitted answer landing with no visible
+// effect downstream was never fully root-caused (could have been the
+// match, could have been workflow-level field wiring - see the "Downstream
+// wiring gotcha" note in the API reference's own section 9.3).
+//
+// The off-platform mechanism sidesteps all of that: Opus itself PUSHES a
+// dispatch to a webhook URL configured directly on the "KYC Human Review"
+// node (in the Opus workflow builder, not here), tagged with the job's own
+// execution_id - no matching/guessing needed. This is a two-exchange round
+// trip:
+//
+//   Exchange 1 (DISPATCH, Opus -> us): POST /api/opus-webhook/human-review
+//   with { execution_id, workflow_id, workflow_name, inputs,
+//   callback: {url, token, token_header}, expected_output_schema }. We
+//   must ack with 2xx within 15s - this is NOT the place to do anything
+//   slow, just store it.
+//
+//   Exchange 2 (CALLBACK, us -> Opus, whenever the user submits the
+//   in-app review form): POST to the exact callback.url from exchange 1
+//   (never reconstructed), with header [callback.token_header]:
+//   callback.token, body { output_data: {<id>: {value, type}}, status }.
+//   The token is single-use - a second submission for the same dispatch
+//   gets 401 from Opus.
+//
+// UNVERIFIED AGAINST A LIVE DISPATCH as of 2026-08-27 (this sandbox has no
+// network path to operator.opus.com, and the Opus node hasn't been
+// switched to off-platform yet) - the exact shape of expected_output_schema
+// (in particular, the "type" object to echo back per field) is inferred
+// from the API reference's one worked example (a "float" field) rather
+// than a real KYC dispatch. The full raw payload is logged on first
+// receipt specifically so this can be corrected against reality fast if
+// the shape differs. NOTE: this requires a public URL - Opus's servers
+// cannot reach a local dev server, so exchange 1 only works against the
+// deployed (Vercel) instance, never localhost.
+// ---------------------------------------------------------------------
+
+// jobId (== the dispatch's execution_id) -> the stored dispatch, until this
+// job's review is submitted (or the process restarts - in-memory only,
+// same caveat as everywhere else in this file: fine for one dev/small
+// instance, would need a shared store behind multiple serverless
+// instances, since a Vercel deployment doesn't guarantee the dispatch and
+// the later submit hit the same warm instance).
+const pendingReviewDispatches = new Map();
+
+app.post('/api/opus-webhook/human-review', (req, res) => {
+  const body = req.body || {};
+  const { execution_id: jobId, callback, expected_output_schema: expectedOutputSchema } = body;
+
+  console.log(`[hitl-dispatch] received for jobId=${jobId}`);
+  // Full raw dump on first receipt - this is the one live look we get at
+  // expected_output_schema's real shape (see UNVERIFIED note above). Keep
+  // this until that's confirmed once.
+  console.log('[hitl-dispatch] raw payload:', JSON.stringify(body));
+
+  if (!jobId || !callback || !callback.url || !callback.token) {
+    console.error('[hitl-dispatch] malformed dispatch - missing execution_id or callback info', body);
+    // Still 2xx: per the API reference, a non-2xx here triggers Opus's own
+    // retry/circuit-breaker behavior, which won't fix a payload that's
+    // malformed on arrival. Ack it, just don't store anything usable.
+    return res.status(200).json({ received: true, warning: 'malformed dispatch, ignored' });
+  }
+
+  pendingReviewDispatches.set(String(jobId), {
+    callback,
+    expectedOutputSchema: expectedOutputSchema || {},
+    workflowId: body.workflow_id,
+    workflowName: body.workflow_name,
+    receivedAt: Date.now(),
+  });
+
+  res.status(200).json({ received: true });
+});
+
+app.get('/api/run/:id/review', (req, res) => {
+  const jobId = req.params.id;
+  const dispatch = pendingReviewDispatches.get(jobId);
+  res.json({ pending: Boolean(dispatch) });
+});
+
+app.post('/api/run/:id/review', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const { canApprove, comments } = req.body;
+
+    const dispatch = pendingReviewDispatches.get(jobId);
+    if (!dispatch) {
+      return res.status(400).json({ error: 'No pending review dispatch found for this job. Refresh and try again.' });
+    }
+    if (typeof canApprove !== 'boolean') {
+      return res.status(400).json({ error: 'canApprove must be true or false.' });
+    }
+
+    const { callback, expectedOutputSchema } = dispatch;
+
+    // Echo back whatever "type" descriptor Opus itself declared for each
+    // field in expected_output_schema, rather than hardcoding one - the
+    // API reference only shows one worked example (a "float" field) and
+    // explicitly wraps every value as {value, type}, never bare. Falls
+    // back to a sensible guess only if a field is unexpectedly absent from
+    // the schema (logged loudly - that would mean our two hardcoded
+    // REVIEW_OUTPUT_VARS ids no longer match this dispatch's actual schema).
+    function typeFor(varId, fallback) {
+      const declared = expectedOutputSchema && expectedOutputSchema[varId];
+      if (declared && declared.type) return declared.type;
+      console.warn(`[hitl-callback] jobId=${jobId} no schema entry for ${varId} - using fallback type`, fallback);
+      return fallback;
+    }
+
+    const outputData = {
+      [REVIEW_OUTPUT_VARS.canApprove]: {
+        value: canApprove,
+        type: typeFor(REVIEW_OUTPUT_VARS.canApprove, { type: 'boolean', type_definition: null }),
+      },
+      [REVIEW_OUTPUT_VARS.comments]: {
+        value: comments || '',
+        type: typeFor(REVIEW_OUTPUT_VARS.comments, { type: 'string', type_definition: null }),
+      },
+    };
+
+    const tokenHeader = callback.token_header || 'X-Opus-Callback-Token';
+
+    // The token is single-use and this is a genuine external URL (not our
+    // own OPUS_BASE_URL), so this deliberately bypasses opusFetch (which
+    // is hardcoded to OPUS_BASE_URL + our service key) and calls
+    // callback.url directly, exactly as given.
+    const callbackRes = await fetch(callback.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [tokenHeader]: callback.token,
+      },
+      body: JSON.stringify({ output_data: outputData, status: 'success' }),
+    });
+
+    if (!callbackRes.ok) {
+      const errText = await callbackRes.text().catch(() => '');
+      throw new Error(`Opus callback failed: ${callbackRes.status} ${errText}`);
+    }
+
+    pendingReviewDispatches.delete(jobId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('review complete error', err);
+    res.status(500).json({ error: err.message || 'Failed to submit review.' });
   }
 });
 

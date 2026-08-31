@@ -26,6 +26,16 @@
   --color-btn-primary-end: #7a2048;
 
   --shadow-card: 0 2px 6px rgba(24, 24, 24, 0.1), 0 10px 26px rgba(24, 24, 24, 0.08);
+
+  /* ADDED 2026-08-31: enterprise-compliance-console pass, inspired by a
+     reference banking KYC case-management UI the user shared (Meridian
+     Bank mockup) - "similar, not a clone": adopt the layout language
+     (off-white page behind white cards, uppercase mono micro-labels,
+     small connection-status pill in the header) while keeping the
+     existing AppliedAI/Opus brand palette above untouched. Scoped to this
+     single-page app only, not a full multi-tab rebuild. */
+  --color-page-bg: #f4f5f7;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 * {
@@ -37,7 +47,7 @@ body {
   padding: 0;
   font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-weight: 400;
-  background: var(--color-bg);
+  background: var(--color-page-bg);
   color: var(--color-text-secondary);
 }
 
@@ -61,12 +71,51 @@ img {
   padding: 1rem 1.5rem;
 }
 
-.brand {
+.app-header-inner {
   max-width: 640px;
   margin: 0 auto;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
   gap: 0.85rem;
+  min-width: 0;
+}
+
+/* Small connection-status pill in the header, echoing the "WORKFLOW
+   LINKED" indicator from the reference dashboard - static/decorative
+   (this app has one fixed workflow connection, not a settings screen to
+   check live), not a real-time health check. */
+.header-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-green);
+  box-shadow: 0 0 0 3px rgba(87, 216, 115, 0.25);
 }
 
 .brand-logo {
@@ -162,14 +211,13 @@ img {
   padding: 0.9rem 2.5rem;
 }
 
-/* Layout for #app-view (header + .content) once past the landing view -
-   the header/.content elements inside it keep their own existing rules
-   unchanged; this just lets #app-view participate as a plain block.
-   The [hidden] rule is required: an author-stylesheet class selector like
-   plain .app-view beats the UA stylesheet's [hidden] { display:none },
-   so without this, #app-view stayed visible (stacked below the landing
-   view) even while its hidden attribute was set - same issue already
-   worked around for .status-progress[hidden] above. */
+/* Layout for #app-view (sidebar + header + .content) once past the
+   landing view. The [hidden] rule is required: an author-stylesheet class
+   selector like plain .app-view beats the UA stylesheet's
+   [hidden] { display:none }, so without this, #app-view stayed visible
+   (stacked below the landing view) even while its hidden attribute was
+   set - same issue already worked around for .status-progress[hidden]
+   above. */
 .app-view {
   display: block;
 }
@@ -178,23 +226,154 @@ img {
   display: none;
 }
 
+/* ---------- App shell: sidebar + main (ADDED 2026-08-31) ---------- */
+/* "Similar, not a clone" of the reference dashboard's shell: a persistent
+   left nav switching between page-panels (see the data-view / [data-view-panel]
+   wiring in app.js) instead of the previous single centered form. Only
+   "New Intake" is wired to anything real - see each panel's own comment
+   in index.html for what's real vs. sample data. */
+
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  flex-shrink: 0;
+  width: 216px;
+  display: flex;
+  flex-direction: column;
+  /* Brand purple instead of the reference's navy - ties the shell back to
+     the existing AppliedAI/Opus palette rather than borrowing their color. */
+  background: var(--color-heading);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 1.4rem 0 1rem;
+}
+
+.sidebar-brand {
+  padding: 0 1.25rem 1.1rem;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-brand-text {
+  font-family: "Prompt", sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #ffffff;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0 0.7rem;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  font-family: "Open Sans", sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.65rem 0.75rem;
+  color: rgba(255, 255, 255, 0.72);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.sidebar-footer {
+  padding: 1rem 1.25rem 0;
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-footer-text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ---------- Layout ---------- */
 
 .content {
-  max-width: 640px;
+  flex: 1;
+  max-width: 1180px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem 1.5rem 1rem;
+  padding: 2rem 2rem 2.5rem;
+}
+
+/* Each sidebar tab's content area. Deliberately no [hidden] override here
+   like .app-view/.status-banner above got - this rule sets no `display`
+   of its own (block is the plain <section> default), so the UA
+   stylesheet's [hidden] { display:none } already wins on its own and
+   there's nothing to override. */
+.view-panel {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
 
+.view-panel[hidden] {
+  display: none;
+}
+
+/* Only "New Intake" keeps the original narrow, centered form width - every
+   other tab (tables/tiles) uses the full .content width above. */
+.intake-narrow {
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+}
+
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: var(--shadow-card);
   padding: 1.75rem;
+}
+
+/* Small-caps mono breadcrumb-style label above the card title, e.g.
+   "Banking KYC / New Intake" - echoes the reference dashboard's
+   section/page trail without building out real navigation. */
+.card-eyebrow {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
 }
 
 .card-title {
@@ -243,12 +422,19 @@ img {
   margin-bottom: 1.4rem;
 }
 
+/* Uppercase mono micro-labels ("APPLICATION FORM (JSON)"-style) instead
+   of plain bold text - the single biggest contributor to the "compliance
+   console" feel from the reference. Applies to every field label in the
+   app (form, human review) for one consistent typographic system. */
 label {
   display: block;
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--color-text);
-  margin-bottom: 0.35rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
 }
 
 .hint {
@@ -411,13 +597,17 @@ input:focus {
 }
 
 .status-heading {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--color-text);
 }
 
 .status-steps-count {
-  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--color-text-muted);
 }
@@ -472,9 +662,11 @@ input:focus {
 
 .step-pill {
   display: inline-block;
-  font-family: "Open Sans", sans-serif;
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
   background: var(--color-surface);
@@ -505,6 +697,51 @@ input:focus {
   background: var(--color-surface-muted);
   border-color: var(--color-border);
   color: var(--color-text-muted);
+}
+
+/* ---------- Human review card ---------- */
+
+.review-card {
+  border-left: 4px solid var(--color-yellow);
+}
+
+.review-toggle-group {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.review-toggle-btn {
+  flex: 1;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.65rem 1rem;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  transition: filter 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.review-toggle-btn:hover {
+  filter: brightness(0.97);
+}
+
+/* Matches the app's existing tone convention (approve -> green, reject ->
+   pink) - see TONE_RULES in app.js. */
+.review-toggle-btn--active-approve {
+  background: var(--color-green);
+  border-color: var(--color-green);
+  color: #181818;
+}
+
+.review-toggle-btn--active-reject {
+  background: var(--color-pink);
+  border-color: var(--color-pink);
+  color: #181818;
 }
 
 /* ---------- Error card ---------- */
@@ -543,10 +780,11 @@ input:focus {
 }
 
 .result-label {
-  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-muted);
   margin-bottom: 0.35rem;
 }
@@ -554,13 +792,13 @@ input:focus {
 /* Small-caps gray label above a bold value - same pattern used for
    Final Decision / Routing Flag above and for the section headings below. */
 .result-section h3 {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-muted);
   margin: 0 0 0.4rem;
-  font-family: "Open Sans", sans-serif;
+  font-family: var(--font-mono);
 }
 
 .result-section {
@@ -574,12 +812,13 @@ input:focus {
    not new CSS. */
 .badge {
   display: inline-block;
-  font-family: "Open Sans", sans-serif;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   border-radius: 999px;
   padding: 0.42rem 0.95rem;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
 }
@@ -706,4 +945,216 @@ details summary {
 
 .case-file-json {
   margin-top: 0.9rem;
+}
+
+/* ---------- Stat tiles (Case Queue / Reports) - ADDED 2026-08-31 ---------- */
+
+.stat-tile-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1rem;
+}
+
+.stat-tile {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  box-shadow: var(--shadow-card);
+}
+
+.stat-tile-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.stat-tile-value {
+  font-family: "Prompt", sans-serif;
+  font-weight: 500;
+  font-size: 1.7rem;
+  color: var(--color-heading);
+  margin-bottom: 0.2rem;
+}
+
+.stat-tile-desc {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Data tables (Case Queue / My Cases / Sanctions Alerts) ---------- */
+
+.table-card {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.data-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table-empty {
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* Small "this isn't real yet" flag on the Sanctions Alerts / Reports tabs. */
+.sample-data-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* ---------- Reports breakdown blocks ---------- */
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.report-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem 1.4rem;
+}
+
+.report-block-title {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 0 0 0.9rem;
+}
+
+.report-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.report-row:last-child {
+  margin-bottom: 0;
+}
+
+.report-row-label {
+  flex-shrink: 0;
+  width: 90px;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.report-bar-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.report-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.report-row-value {
+  flex-shrink: 0;
+  width: 56px;
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* ---------- Settings ---------- */
+
+.settings-card-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 1.1rem;
+  font-family: var(--font-mono);
+}
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-row-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.settings-row-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: right;
+  word-break: break-all;
 }

@@ -6,7 +6,7 @@
 <title>Banking KYC — Run Workflow</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Prompt:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Prompt:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -23,114 +23,231 @@
   </section>
 
   <div id="app-view" class="app-view" hidden>
-  <header class="app-header">
-    <div class="brand">
-      <span class="brand-logo">
-        <img src="assets/opus-logo-fused.png" alt="Opus">
-      </span>
-      <span class="brand-text">
-        <span class="brand-title">Banking KYC</span>
-        <span class="brand-sep">|</span>
-        <span class="brand-subtitle">Workflow Console</span>
-      </span>
+  <div class="app-shell">
+
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-text">Banking KYC</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button type="button" class="nav-item" data-view="queue">Case Queue</button>
+        <button type="button" class="nav-item active" data-view="intake">New Intake</button>
+        <button type="button" class="nav-item" data-view="mycases">My Cases</button>
+        <button type="button" class="nav-item" data-view="sanctions">Sanctions Alerts</button>
+        <button type="button" class="nav-item" data-view="reports">Reports</button>
+        <button type="button" class="nav-item" data-view="settings">Settings</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="sidebar-footer-text">Applied AI</span>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand">
+            <span class="brand-text">
+              <span id="header-view-title" class="brand-title">New Intake</span>
+              <span class="brand-sep">|</span>
+              <span class="brand-subtitle">Compliance Ops</span>
+            </span>
+          </div>
+          <div class="header-status" title="This instance is configured against the Opus workflow API">
+            <span class="status-dot"></span>
+            Workflow Linked
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+
+        <!-- ============== Case Queue (real data, from /api/case-history) ============== -->
+        <section class="view-panel" data-view-panel="queue" hidden>
+          <p class="card-eyebrow">Banking KYC / Case Queue</p>
+          <h1 class="page-title">Case queue</h1>
+          <p class="subtitle">Every case run through this console, most recent first.</p>
+
+          <div id="queue-stats" class="stat-tile-row"></div>
+
+          <div class="card table-card">
+            <div id="queue-table-wrap"></div>
+          </div>
+        </section>
+
+        <!-- ============== New Intake (the real, functional page) ============== -->
+        <section class="view-panel intake-narrow" data-view-panel="intake">
+          <section class="card">
+            <p class="card-eyebrow">Banking KYC / New Intake</p>
+            <h1 class="card-title">Submit a Case</h1>
+            <p class="subtitle">Upload documents and run the KYC screening workflow.</p>
+
+            <form id="kyc-form">
+              <div class="field">
+                <label for="id-document">ID Document</label>
+                <input type="file" id="id-document" name="idDocument" required>
+              </div>
+
+              <div class="field">
+                <label for="proof-of-address">Proof of Address <span class="hint">(PDF only, max 10MB)</span></label>
+                <input type="file" id="proof-of-address" name="proofOfAddress" accept="application/pdf" required>
+              </div>
+
+              <div class="field">
+                <label for="application-form-json">Application Form JSON</label>
+                <textarea id="application-form-json" name="applicationFormJson" rows="8" placeholder='{ "applicantName": "..." }' required></textarea>
+              </div>
+
+              <div class="field">
+                <label for="screening-policy">Screening Policy</label>
+                <textarea id="screening-policy" name="screeningPolicy" rows="8" placeholder='{ "policyName": "..." }' required></textarea>
+              </div>
+
+              <div id="form-error" class="error-banner" hidden></div>
+
+              <button type="submit" id="submit-btn" class="btn btn-primary">Run KYC Workflow</button>
+              <p class="btn-caption">Upload documents first, then the workflow runs. This can take a few minutes.</p>
+            </form>
+          </section>
+
+          <div id="status-panel" class="status-banner" hidden>
+            <div class="status-top">
+              <div class="spinner"></div>
+              <div class="status-top-text">
+                <div id="status-text">Processing…</div>
+                <div id="status-elapsed" class="status-elapsed"></div>
+              </div>
+            </div>
+
+            <div id="status-progress" class="status-progress" hidden>
+              <div class="status-progress-header">
+                <span class="status-heading">Workflow Progress</span>
+                <span id="status-steps-count" class="status-steps-count"></span>
+              </div>
+              <div class="progress-track">
+                <div id="progress-bar-fill" class="progress-bar-fill"></div>
+                <div id="progress-bar-running" class="progress-bar-running" hidden></div>
+              </div>
+              <div id="status-step-pills" class="status-step-pills"></div>
+            </div>
+          </div>
+
+          <section id="review-panel" class="card review-card" hidden>
+            <h2 class="card-title">Human Review Required</h2>
+            <p class="subtitle">This case is paused for manual review. Submit a decision to continue the workflow.</p>
+
+            <div class="field">
+              <label>Can Approve?</label>
+              <div class="review-toggle-group">
+                <button type="button" id="review-approve-btn" class="review-toggle-btn">Approve</button>
+                <button type="button" id="review-reject-btn" class="review-toggle-btn">Reject</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="review-comments">Comments <span class="hint">(optional)</span></label>
+              <textarea id="review-comments" rows="4" placeholder="Notes for the case file…"></textarea>
+            </div>
+
+            <div id="review-error" class="error-banner" hidden></div>
+
+            <button type="button" id="review-submit-btn" class="btn btn-primary">Continue</button>
+            <p class="btn-caption">Reviews expire quickly — the case restarts from scratch if this isn't submitted in time.</p>
+          </section>
+
+          <section id="error-panel" class="card error-card" hidden>
+            <h2 class="card-title">Job Did Not Complete</h2>
+            <div id="error-status" class="badge"></div>
+            <div id="error-nodes"></div>
+          </section>
+
+          <section id="results-panel" class="card results-card" hidden>
+            <h2 class="card-title">Result</h2>
+
+            <div class="result-headline">
+              <div>
+                <div class="result-label">Final Decision</div>
+                <div id="final-decision" class="badge badge-lg"></div>
+              </div>
+              <div class="routing-flag-group">
+                <div class="result-label">Routing Flag</div>
+                <div id="routing-flag" class="badge"></div>
+              </div>
+            </div>
+
+            <div class="result-section">
+              <h3>Audit Summary</h3>
+              <div id="audit-summary" class="audit-summary"></div>
+            </div>
+
+            <div class="result-section">
+              <h3>Case File</h3>
+              <div id="case-file"></div>
+            </div>
+
+            <button id="reset-btn" type="button" class="btn btn-secondary">Run Another</button>
+          </section>
+
+          <p class="page-footer"><strong>Banking KYC Console</strong> · built on the Opus Jobs API</p>
+          <p class="powered-by">
+            <span class="powered-by-badge">
+              <img src="assets/appliedai-wordmark-black.png" alt="Applied AI">
+            </span>
+          </p>
+        </section>
+
+        <!-- ============== My Cases (real data, same history) ============== -->
+        <section class="view-panel" data-view-panel="mycases" hidden>
+          <p class="card-eyebrow">Banking KYC / My Cases</p>
+          <h1 class="page-title">My cases</h1>
+          <p class="subtitle">This console doesn't have separate analyst accounts yet — this is every case run here.</p>
+
+          <div class="card table-card">
+            <div id="mycases-table-wrap"></div>
+          </div>
+        </section>
+
+        <!-- ============== Sanctions Alerts (sample/mock data - preview only) ============== -->
+        <section class="view-panel" data-view-panel="sanctions" hidden>
+          <p class="card-eyebrow">Banking KYC / Sanctions Alerts</p>
+          <h1 class="page-title">Sanctions alerts</h1>
+          <p class="subtitle">
+            <span class="sample-data-badge">Sample data</span>
+            Preview only — not wired to a live screening feed yet.
+          </p>
+
+          <div class="card table-card">
+            <div id="sanctions-table-wrap"></div>
+          </div>
+        </section>
+
+        <!-- ============== Reports (sample/mock data - preview only) ============== -->
+        <section class="view-panel" data-view-panel="reports" hidden>
+          <p class="card-eyebrow">Banking KYC / Reports</p>
+          <h1 class="page-title">Management information</h1>
+          <p class="subtitle">
+            <span class="sample-data-badge">Sample data</span>
+            Preview only — illustrative figures, not computed from real cases.
+          </p>
+
+          <div id="reports-stats" class="stat-tile-row"></div>
+          <div id="reports-breakdowns" class="report-grid"></div>
+        </section>
+
+        <!-- ============== Settings (real connection info from /api/config) ============== -->
+        <section class="view-panel" data-view-panel="settings" hidden>
+          <p class="card-eyebrow">Banking KYC / Settings</p>
+          <h1 class="page-title">Settings</h1>
+          <p class="subtitle">Workflow connection details for this instance.</p>
+
+          <div class="card">
+            <h3 class="settings-card-title">Workflow connection</h3>
+            <div id="settings-connection" class="settings-grid"></div>
+          </div>
+        </section>
+
+      </main>
     </div>
-  </header>
-
-  <main class="content">
-    <section class="card">
-      <h1 class="card-title">Submit a Case</h1>
-      <p class="subtitle">Upload documents and run the KYC screening workflow.</p>
-
-      <form id="kyc-form">
-        <div class="field">
-          <label for="id-document">ID Document</label>
-          <input type="file" id="id-document" name="idDocument" required>
-        </div>
-
-        <div class="field">
-          <label for="proof-of-address">Proof of Address <span class="hint">(PDF only, max 10MB)</span></label>
-          <input type="file" id="proof-of-address" name="proofOfAddress" accept="application/pdf" required>
-        </div>
-
-        <div class="field">
-          <label for="application-form-json">Application Form JSON</label>
-          <textarea id="application-form-json" name="applicationFormJson" rows="8" placeholder='{ "applicantName": "..." }' required></textarea>
-        </div>
-
-        <div class="field">
-          <label for="screening-policy">Screening Policy</label>
-          <textarea id="screening-policy" name="screeningPolicy" rows="8" placeholder='{ "policyName": "..." }' required></textarea>
-        </div>
-
-        <div id="form-error" class="error-banner" hidden></div>
-
-        <button type="submit" id="submit-btn" class="btn btn-primary">Run KYC Workflow</button>
-        <p class="btn-caption">Upload documents first, then the workflow runs. This can take a few minutes.</p>
-      </form>
-    </section>
-
-    <div id="status-panel" class="status-banner" hidden>
-      <div class="status-top">
-        <div class="spinner"></div>
-        <div class="status-top-text">
-          <div id="status-text">Processing…</div>
-          <div id="status-elapsed" class="status-elapsed"></div>
-        </div>
-      </div>
-
-      <div id="status-progress" class="status-progress" hidden>
-        <div class="status-progress-header">
-          <span class="status-heading">Workflow Progress</span>
-          <span id="status-steps-count" class="status-steps-count"></span>
-        </div>
-        <div class="progress-track">
-          <div id="progress-bar-fill" class="progress-bar-fill"></div>
-          <div id="progress-bar-running" class="progress-bar-running" hidden></div>
-        </div>
-        <div id="status-step-pills" class="status-step-pills"></div>
-      </div>
-    </div>
-
-    <section id="error-panel" class="card error-card" hidden>
-      <h2 class="card-title">Job Did Not Complete</h2>
-      <div id="error-status" class="badge"></div>
-      <div id="error-nodes"></div>
-    </section>
-
-    <section id="results-panel" class="card results-card" hidden>
-      <h2 class="card-title">Result</h2>
-
-      <div class="result-headline">
-        <div>
-          <div class="result-label">Final Decision</div>
-          <div id="final-decision" class="badge badge-lg"></div>
-        </div>
-        <div class="routing-flag-group">
-          <div class="result-label">Routing Flag</div>
-          <div id="routing-flag" class="badge"></div>
-        </div>
-      </div>
-
-      <div class="result-section">
-        <h3>Audit Summary</h3>
-        <div id="audit-summary" class="audit-summary"></div>
-      </div>
-
-      <div class="result-section">
-        <h3>Case File</h3>
-        <div id="case-file"></div>
-      </div>
-
-      <button id="reset-btn" type="button" class="btn btn-secondary">Run Another</button>
-    </section>
-
-    <p class="page-footer"><strong>Banking KYC Console</strong> · built on the Opus Jobs API</p>
-    <p class="powered-by">
-      <span class="powered-by-badge">
-        <img src="assets/appliedai-wordmark-black.png" alt="Applied AI">
-      </span>
-    </p>
-  </main>
+  </div>
   </div>
 </div>
 

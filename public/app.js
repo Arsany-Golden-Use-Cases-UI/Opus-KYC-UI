@@ -7,6 +7,62 @@ startBtn.addEventListener('click', () => {
   appView.hidden = false;
 });
 
+// ============================================================
+// Tab shell: sidebar navigation between the app's views.
+// ============================================================
+const navItems = Array.from(document.querySelectorAll('.nav-item'));
+const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'));
+const headerViewTitle = document.getElementById('header-view-title');
+
+const VIEW_TITLES = {
+  queue: 'Case Queue',
+  intake: 'New Intake',
+  mycases: 'My Cases',
+  sanctions: 'Sanctions Alerts',
+  reports: 'Reports',
+  settings: 'Settings',
+};
+
+// Each tab's data is fetched/rendered once, the first time it's opened,
+// rather than on every visit - the underlying data (real history or
+// static mock data) doesn't change within a single page load.
+const viewLoaded = {};
+
+function switchToView(viewName) {
+  if (!VIEW_TITLES[viewName]) return;
+
+  navItems.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+  viewPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.viewPanel !== viewName;
+  });
+  headerViewTitle.textContent = VIEW_TITLES[viewName];
+
+  if (!viewLoaded[viewName]) {
+    viewLoaded[viewName] = true;
+    loadViewData(viewName);
+  }
+}
+
+function loadViewData(viewName) {
+  if (viewName === 'queue') {
+    renderCaseTable('queue-table-wrap', 'queue-stats');
+  } else if (viewName === 'mycases') {
+    renderCaseTable('mycases-table-wrap', null);
+  } else if (viewName === 'sanctions') {
+    renderSanctionsTable();
+  } else if (viewName === 'reports') {
+    renderReports();
+  } else if (viewName === 'settings') {
+    renderSettings();
+  }
+}
+
+navItems.forEach((btn) => {
+  btn.addEventListener('click', () => switchToView(btn.dataset.view));
+});
+
 const form = document.getElementById('kyc-form');
 const submitBtn = document.getElementById('submit-btn');
 const formError = document.getElementById('form-error');
@@ -18,6 +74,12 @@ const statusStepsCount = document.getElementById('status-steps-count');
 const progressBarFill = document.getElementById('progress-bar-fill');
 const progressBarRunning = document.getElementById('progress-bar-running');
 const statusStepPills = document.getElementById('status-step-pills');
+const reviewPanel = document.getElementById('review-panel');
+const reviewApproveBtn = document.getElementById('review-approve-btn');
+const reviewRejectBtn = document.getElementById('review-reject-btn');
+const reviewComments = document.getElementById('review-comments');
+const reviewError = document.getElementById('review-error');
+const reviewSubmitBtn = document.getElementById('review-submit-btn');
 const errorPanel = document.getElementById('error-panel');
 const errorStatus = document.getElementById('error-status');
 const errorNodes = document.getElementById('error-nodes');
@@ -226,6 +288,7 @@ form.addEventListener('submit', async (e) => {
   statusPanel.hidden = false;
   statusText.textContent = 'Uploading documents…';
   resetProgress();
+  resetReview();
 
   try {
     const [idDocumentFileUrl, proofOfAddressFileUrl] = await Promise.all([
@@ -244,6 +307,7 @@ form.addEventListener('submit', async (e) => {
     if (!runRes.ok) throw new Error(runData.error || 'Failed to start job.');
 
     statusText.textContent = 'Processing — this may take a few minutes…';
+    setJobIdInUrl(runData.jobExecutionId);
     pollStatus(runData.jobExecutionId);
   } catch (err) {
     setBusy(false);
@@ -252,8 +316,123 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
+// ---------------------------------------------------------------------
+// In-platform Human Review (see server.js's GET/POST /api/run/:id/review
+// for the actual Opus API calls - this is just the UI side: show the form
+// once a review is picked up, submit it, then resume the normal poll).
+// ---------------------------------------------------------------------
+
+let currentReviewJobId = null;
+let currentReviewId = null;
+let reviewCanApprove = null; // true | false | null (not yet chosen)
+let reviewCheckInFlight = false;
+
+function setReviewChoice(value) {
+  reviewCanApprove = value;
+  reviewApproveBtn.classList.toggle('review-toggle-btn--active-approve', value === true);
+  reviewRejectBtn.classList.toggle('review-toggle-btn--active-reject', value === false);
+}
+
+reviewApproveBtn.addEventListener('click', () => setReviewChoice(true));
+reviewRejectBtn.addEventListener('click', () => setReviewChoice(false));
+
+function resetReview() {
+  reviewPanel.hidden = true;
+  reviewError.hidden = true;
+  reviewError.textContent = '';
+  reviewComments.value = '';
+  reviewSubmitBtn.disabled = false;
+  reviewSubmitBtn.textContent = 'Continue';
+  currentReviewJobId = null;
+  currentReviewId = null;
+  setReviewChoice(null);
+}
+
+// Called on every in-progress poll tick once the audit data shows the
+// workflow sitting at the "KYC Human Review" node - see the runningNode
+// check in pollStatus() below. Best-effort: a "not pending yet" response
+// just means keep waiting for the next regular poll tick, same cadence
+// the API reference recommends for this step (~4s, which matches
+// POLL_INTERVAL_MS already).
+async function maybeCheckForReview(jobId) {
+  if (reviewCheckInFlight || !reviewPanel.hidden) return;
+  reviewCheckInFlight = true;
+  try {
+    const res = await fetch(`/api/run/${jobId}/review`);
+    const data = await res.json();
+    // SWITCHED 2026-08-27 to the off-platform webhook mechanism (server.js
+    // has the full story) - there's no separate reviewId anymore, Opus's
+    // dispatch is keyed by jobId directly, so `pending` alone is the signal.
+    if (data.pending) {
+      currentReviewJobId = jobId;
+      reviewPanel.hidden = false;
+    }
+  } catch (err) {
+    // Swallow - this is a best-effort check layered on top of the main
+    // status poll, which will just try again next tick.
+    console.error('review check error', err);
+  } finally {
+    reviewCheckInFlight = false;
+  }
+}
+
+reviewSubmitBtn.addEventListener('click', async () => {
+  if (reviewCanApprove === null) {
+    reviewError.textContent = 'Choose Approve or Reject before continuing.';
+    reviewError.hidden = false;
+    return;
+  }
+  reviewError.hidden = true;
+  reviewSubmitBtn.disabled = true;
+  reviewSubmitBtn.textContent = 'Submitting…';
+
+  try {
+    const res = await fetch(`/api/run/${currentReviewJobId}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ canApprove: reviewCanApprove, comments: reviewComments.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to submit review.');
+
+    resetReview();
+    statusText.textContent = 'Review submitted — resuming workflow…';
+    // The main poll loop (started by the original pollStatus() call) never
+    // stopped while the review panel was up - it'll pick up progress past
+    // this node on its own next tick, no need to restart it here.
+  } catch (err) {
+    reviewError.textContent = err.message || 'Something went wrong submitting the review.';
+    reviewError.hidden = false;
+    reviewSubmitBtn.disabled = false;
+    reviewSubmitBtn.textContent = 'Continue';
+  }
+});
+
 function pollStatus(jobId) {
   startElapsedTimer();
+
+  // A single transient error (e.g. Opus's 50 req/min rate limit tripping
+  // for one tick) used to kill the whole poll loop outright - confirmed
+  // live 2026-08-27 via a pink #form-error banner surfacing a 429 on an
+  // otherwise-healthy in-progress job. Now a run of transient failures is
+  // tolerated and polling only gives up once it's clearly stuck, not on
+  // the first hiccup.
+  let consecutiveFailures = 0;
+  const MAX_CONSECUTIVE_FAILURES = 4; // ~16s of silence at a 4s interval
+
+  // Checks for a pending human review on a fixed cadence, independent of
+  // whether progress "looks stalled". A prior version only checked once
+  // nbExecutedNodes held steady across two ticks, on the theory that a
+  // job paused for review has nothing left to execute - but confirmed
+  // live 2026-08-27 (job 73121): a real DISPATCHED review sat there the
+  // whole time while nbExecutedNodes kept advancing anyway (other
+  // branches/retries still running server-side), so the stall never
+  // "held" for two consecutive ticks and the check never fired. A fixed
+  // interval catches it regardless, while still staying well under
+  // Opus's 50 req/min limit (1 extra call roughly every 8s, on top of
+  // the main poll's 2 calls every 4s).
+  let pollTickCount = 0;
+  const REVIEW_CHECK_EVERY_N_TICKS = 2; // ~every 8s at a 4s poll interval
 
   const poll = async () => {
     try {
@@ -261,30 +440,63 @@ function pollStatus(jobId) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to check job status.');
 
+      consecutiveFailures = 0;
+
       if (data.status === 'COMPLETED') {
         stopPolling();
         setBusy(false);
         statusPanel.hidden = true;
+        setJobIdInUrl(null);
         showResults(data.outputs);
       } else if (['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(data.status)) {
         stopPolling();
         setBusy(false);
         statusPanel.hidden = true;
+        setJobIdInUrl(null);
         showFailure(data);
       } else {
         statusText.textContent = `Processing (${data.status})…`;
         renderProgress(data);
+
+        pollTickCount += 1;
+        if (pollTickCount % REVIEW_CHECK_EVERY_N_TICKS === 0) {
+          maybeCheckForReview(jobId);
+        }
       }
     } catch (err) {
-      stopPolling();
-      setBusy(false);
-      statusPanel.hidden = true;
-      showError(err.message || 'Something went wrong while polling.');
+      consecutiveFailures += 1;
+      console.error(`poll error (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`, err);
+
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        stopPolling();
+        setBusy(false);
+        statusPanel.hidden = true;
+        setJobIdInUrl(null);
+        showError(err.message || 'Something went wrong while polling.');
+      } else {
+        // Transient - surface it in the status line without tearing down
+        // the panel, then just try again on the next tick.
+        statusText.textContent = 'Checking status… (a request was rate-limited, retrying)';
+      }
     }
   };
 
   poll();
   pollTimer = setInterval(poll, POLL_INTERVAL_MS);
+}
+
+// Persists the in-flight job's ID in the URL (not localStorage - this is
+// meant to survive a same-tab refresh, not to be a durable cross-session
+// record) so a refresh mid-run can resume watching it instead of losing
+// track entirely. Cleared once the job reaches a terminal state.
+function setJobIdInUrl(jobId) {
+  const url = new URL(window.location.href);
+  if (jobId) {
+    url.searchParams.set('job', jobId);
+  } else {
+    url.searchParams.delete('job');
+  }
+  history.replaceState(null, '', url);
 }
 
 function stopPolling() {
@@ -445,9 +657,343 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+
+// ============================================================
+// Case Queue / My Cases: real history from /api/case-history.
+// ============================================================
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function formatTimestamp(iso) {
+  if (!iso) return '\u2014';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '\u2014';
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function buildBadgeSpan(value, toneOverride) {
+  const span = document.createElement('span');
+  span.className = 'badge';
+  const tone = toneOverride || toneFor(value);
+  span.classList.add(`tone-${tone}`);
+  span.textContent = value ?? '\u2014';
+  return span;
+}
+
+function buildDataTable(columns, rows, emptyMessage) {
+  const wrap = document.createElement('div');
+
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'data-table-empty';
+    empty.textContent = emptyMessage;
+    wrap.appendChild(empty);
+    return wrap;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'data-table';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  columns.forEach((col) => {
+    const th = document.createElement('th');
+    th.textContent = col.label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach((row) => {
+    const tr = document.createElement('tr');
+    columns.forEach((col) => {
+      const td = document.createElement('td');
+      const rendered = col.render(row);
+      if (rendered instanceof Node) {
+        td.appendChild(rendered);
+      } else {
+        td.textContent = rendered ?? '\u2014';
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  wrap.appendChild(table);
+  return wrap;
+}
+
+const CASE_TABLE_COLUMNS = [
+  { label: 'Case', render: (row) => (row.title || 'Banking KYC run') },
+  { label: 'Applicant', render: (row) => row.applicantName || '\u2014' },
+  { label: 'Submitted', render: (row) => formatTimestamp(row.submittedAt) },
+  {
+    label: 'Status',
+    render: (row) => buildBadgeSpan(row.status, JOB_STATUS_TONE[row.status] || (row.status === 'COMPLETED' ? 'green' : 'neutral')),
+  },
+  { label: 'Decision', render: (row) => (row.finalDecision ? buildBadgeSpan(row.finalDecision) : '\u2014') },
+  { label: 'Routing', render: (row) => (row.routingFlag ? buildBadgeSpan(row.routingFlag) : '\u2014') },
+  {
+    label: 'Duration',
+    render: (row) => {
+      const start = new Date(row.submittedAt).getTime();
+      const end = row.completedAt ? new Date(row.completedAt).getTime() : Date.now();
+      if (Number.isNaN(start)) return '\u2014';
+      return formatDuration(end - start);
+    },
+  },
+];
+
+async function fetchCaseHistory() {
+  const res = await fetch('/api/case-history');
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  const data = await res.json();
+  return Array.isArray(data.entries) ? data.entries : [];
+}
+
+function renderQueueStats(containerId, entries) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  const total = entries.length;
+  const inProgress = entries.filter((e) => e.status === 'IN_PROGRESS').length;
+  const completed = entries.filter((e) => e.status === 'COMPLETED').length;
+  const failed = entries.filter((e) => e.status && e.status !== 'IN_PROGRESS' && e.status !== 'COMPLETED').length;
+
+  const tiles = [
+    { label: 'Total Cases', value: total },
+    { label: 'In Progress', value: inProgress },
+    { label: 'Completed', value: completed },
+    { label: 'Failed / Cancelled', value: failed },
+  ];
+
+  el.innerHTML = '';
+  tiles.forEach((tile) => {
+    const div = document.createElement('div');
+    div.className = 'stat-tile';
+    const label = document.createElement('div');
+    label.className = 'stat-tile-label';
+    label.textContent = tile.label;
+    const value = document.createElement('div');
+    value.className = 'stat-tile-value';
+    value.textContent = String(tile.value);
+    div.appendChild(label);
+    div.appendChild(value);
+    el.appendChild(div);
+  });
+}
+
+async function renderCaseTable(tableWrapId, statsContainerId) {
+  const wrap = document.getElementById(tableWrapId);
+  if (!wrap) return;
+  wrap.textContent = 'Loading\u2026';
+
+  try {
+    const entries = await fetchCaseHistory();
+    wrap.innerHTML = '';
+    wrap.appendChild(
+      buildDataTable(CASE_TABLE_COLUMNS, entries, 'No cases have been run through this console yet.')
+    );
+    if (statsContainerId) renderQueueStats(statsContainerId, entries);
+  } catch (err) {
+    wrap.textContent = 'Could not load case history.';
+  }
+}
+
+// ============================================================
+// Sanctions Alerts: invented sample data - preview only.
+// ============================================================
+const SANCTIONS_SAMPLE_ROWS = [
+  { name: 'Karim El-Sayed', list: 'OFAC SDN', matchScore: '92%', status: 'Open', flagged: '2 days ago' },
+  { name: 'Nadia Petrov', list: 'EU Consolidated', matchScore: '78%', status: 'Under Review', flagged: '4 days ago' },
+  { name: 'Global Horizon Trading LLC', list: 'UN Sanctions', matchScore: '65%', status: 'Cleared', flagged: '1 week ago' },
+  { name: 'Youssef Haddad', list: 'OFAC SDN', matchScore: '88%', status: 'Open', flagged: '1 week ago' },
+  { name: 'Alina Marchetti', list: 'UK HMT', matchScore: '71%', status: 'Cleared', flagged: '2 weeks ago' },
+];
+
+const SANCTIONS_COLUMNS = [
+  { label: 'Name / Entity', render: (row) => row.name },
+  { label: 'List', render: (row) => row.list },
+  { label: 'Match Score', render: (row) => row.matchScore },
+  {
+    label: 'Status',
+    render: (row) => {
+      const tone = row.status === 'Cleared' ? 'green' : row.status === 'Open' ? 'pink' : 'yellow';
+      return buildBadgeSpan(row.status, tone);
+    },
+  },
+  { label: 'Flagged', render: (row) => row.flagged },
+];
+
+function renderSanctionsTable() {
+  const wrap = document.getElementById('sanctions-table-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  wrap.appendChild(buildDataTable(SANCTIONS_COLUMNS, SANCTIONS_SAMPLE_ROWS, 'No alerts.'));
+}
+
+// ============================================================
+// Reports: invented sample data - preview only.
+// ============================================================
+function renderReports() {
+  const statsEl = document.getElementById('reports-stats');
+  const breakdownsEl = document.getElementById('reports-breakdowns');
+  if (!statsEl || !breakdownsEl) return;
+
+  const stats = [
+    { label: 'Cases This Month', value: '164' },
+    { label: 'Avg. Turnaround', value: '6m 40s' },
+    { label: 'Auto-Approved', value: '71%' },
+    { label: 'Escalated to Review', value: '12%' },
+  ];
+
+  statsEl.innerHTML = '';
+  stats.forEach((tile) => {
+    const div = document.createElement('div');
+    div.className = 'stat-tile';
+    const label = document.createElement('div');
+    label.className = 'stat-tile-label';
+    label.textContent = tile.label;
+    const value = document.createElement('div');
+    value.className = 'stat-tile-value';
+    value.textContent = tile.value;
+    div.appendChild(label);
+    div.appendChild(value);
+    statsEl.appendChild(div);
+  });
+
+  const breakdowns = [
+    {
+      title: 'Risk Tier Mix',
+      rows: [
+        { label: 'Low', pct: 58 },
+        { label: 'Medium', pct: 29 },
+        { label: 'High', pct: 13 },
+      ],
+    },
+    {
+      title: 'Automation Outcome',
+      rows: [
+        { label: 'Approved', pct: 71 },
+        { label: 'Human Review', pct: 21 },
+        { label: 'Rejected', pct: 8 },
+      ],
+    },
+  ];
+
+  breakdownsEl.innerHTML = '';
+  breakdowns.forEach((block) => {
+    const blockEl = document.createElement('div');
+    blockEl.className = 'report-block';
+
+    const title = document.createElement('div');
+    title.className = 'report-block-title';
+    title.textContent = block.title;
+    blockEl.appendChild(title);
+
+    block.rows.forEach((row) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'report-row';
+
+      const label = document.createElement('div');
+      label.className = 'report-row-label';
+      label.textContent = row.label;
+
+      const track = document.createElement('div');
+      track.className = 'report-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'report-bar-fill';
+      fill.style.width = `${row.pct}%`;
+      track.appendChild(fill);
+
+      const value = document.createElement('div');
+      value.className = 'report-row-value';
+      value.textContent = `${row.pct}%`;
+
+      rowEl.appendChild(label);
+      rowEl.appendChild(track);
+      rowEl.appendChild(value);
+      blockEl.appendChild(rowEl);
+    });
+
+    breakdownsEl.appendChild(blockEl);
+  });
+}
+
+// ============================================================
+// Settings: real connection info from /api/config.
+// ============================================================
+async function renderSettings() {
+  const el = document.getElementById('settings-connection');
+  if (!el) return;
+  el.textContent = 'Loading\u2026';
+
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const config = await res.json();
+
+    const rows = [
+      { label: 'Opus Host', value: config.host || '\u2014' },
+      { label: 'Workflow ID', value: config.workflowId || '\u2014' },
+      { label: 'Service Key Configured', value: config.serviceKeyConfigured ? 'Yes' : 'No' },
+    ];
+
+    el.innerHTML = '';
+    rows.forEach((row) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'settings-row';
+      const label = document.createElement('div');
+      label.className = 'settings-row-label';
+      label.textContent = row.label;
+      const value = document.createElement('div');
+      value.className = 'settings-row-value';
+      value.textContent = row.value;
+      rowEl.appendChild(label);
+      rowEl.appendChild(value);
+      el.appendChild(rowEl);
+    });
+  } catch (err) {
+    el.textContent = 'Could not load connection settings.';
+  }
+}
+
 resetBtn.addEventListener('click', () => {
   form.reset();
   resultsPanel.hidden = true;
   errorPanel.hidden = true;
   clearError();
+  setJobIdInUrl(null);
 });
+
+// Resume watching an in-flight job after a same-tab refresh, if the URL
+// still carries a ?job= param from before the reload. Skips straight past
+// the landing view/upload form to the status panel and re-enters the same
+// poll loop a fresh submission would have started.
+(function resumeJobFromUrl() {
+  const jobId = new URLSearchParams(window.location.search).get('job');
+  if (!jobId) return;
+
+  landingView.hidden = true;
+  appView.hidden = false;
+  setBusy(true);
+  resultsPanel.hidden = true;
+  errorPanel.hidden = true;
+  statusPanel.hidden = false;
+  statusText.textContent = 'Resuming — reconnecting to the running workflow…';
+  resetProgress();
+  resetReview();
+  pollStatus(jobId);
+})();
