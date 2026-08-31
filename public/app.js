@@ -346,6 +346,8 @@ function resetReview() {
   currentReviewJobId = null;
   currentReviewId = null;
   setReviewChoice(null);
+  const inputsContainer = document.getElementById('review-inputs');
+  if (inputsContainer) inputsContainer.innerHTML = '';
 }
 
 // Called on every in-progress poll tick once the audit data shows the
@@ -354,6 +356,71 @@ function resetReview() {
 // just means keep waiting for the next regular poll tick, same cadence
 // the API reference recommends for this step (~4s, which matches
 // POLL_INTERVAL_MS already).
+// The dispatch's "inputs" carry whatever the workflow feeds into this
+// review step (shape/keys not yet fully proven live - see server.js's
+// [hitl-dispatch] log comment). Handles Opus's common {value, ...}
+// wrapper if present, falls back to showing the raw value otherwise, and
+// always includes an expandable raw-JSON view underneath so nothing the
+// reviewer might need is ever hidden by a rendering guess gone wrong.
+function unwrapReviewValue(v) {
+  if (v && typeof v === 'object' && !Array.isArray(v) && 'value' in v) return v.value;
+  return v;
+}
+
+function renderReviewInputs(inputs) {
+  const container = document.getElementById('review-inputs');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const entries = Object.entries(inputs || {});
+  if (!entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'settings-row';
+    const label = document.createElement('div');
+    label.className = 'settings-row-value';
+    label.textContent = 'No case context was included with this review.';
+    empty.appendChild(label);
+    container.appendChild(empty);
+    return;
+  }
+
+  entries.forEach(([key, rawValue]) => {
+    const value = unwrapReviewValue(rawValue);
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+
+    const label = document.createElement('div');
+    label.className = 'settings-row-label';
+    // Strip Opus's workflow_input_/workflow_output_ id prefix before
+    // humanizing - what's left is sometimes still an opaque id fragment
+    // rather than a real label, but that's still more scannable than the
+    // full prefixed id, and the raw-JSON view below has the ground truth.
+    label.textContent = humanizeLabel(key.replace(/^workflow_(input|output)_/, ''));
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'settings-row-value';
+    if (value !== null && typeof value === 'object') {
+      valueEl.textContent = JSON.stringify(value);
+    } else {
+      valueEl.textContent = value === null || value === undefined || value === '' ? '\u2014' : String(value);
+    }
+
+    row.appendChild(label);
+    row.appendChild(valueEl);
+    container.appendChild(row);
+  });
+
+  const details = document.createElement('details');
+  details.className = 'case-file-json';
+  const summary = document.createElement('summary');
+  summary.textContent = 'View raw review inputs (JSON)';
+  const pre = document.createElement('pre');
+  pre.textContent = JSON.stringify(inputs, null, 2);
+  details.appendChild(summary);
+  details.appendChild(pre);
+  container.appendChild(details);
+}
+
 async function maybeCheckForReview(jobId) {
   if (reviewCheckInFlight || !reviewPanel.hidden) return;
   reviewCheckInFlight = true;
@@ -365,6 +432,7 @@ async function maybeCheckForReview(jobId) {
     // dispatch is keyed by jobId directly, so `pending` alone is the signal.
     if (data.pending) {
       currentReviewJobId = jobId;
+      renderReviewInputs(data.inputs || {});
       reviewPanel.hidden = false;
     }
   } catch (err) {

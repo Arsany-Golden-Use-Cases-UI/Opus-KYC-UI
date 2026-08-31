@@ -46,13 +46,16 @@ const OUTPUT_VARS = {
 };
 
 // "KYC Human Review" node's two declared outputs - read off the workflow
-// builder canvas directly (2026-08-27), not discoverable through
-// GET /workflow/{id} in a way that's tied to this specific review step.
-// These are the outputData keys the in-platform review completion API
-// (API reference section 9.3) expects on POST /review/v2/{id}/complete.
+// builder canvas directly, not discoverable through GET /workflow/{id} in
+// a way that's tied to this specific review step. Re-confirmed 2026-08-31
+// after switching the node to off-platform - Opus regenerated new IDs for
+// both outputs at that point, so these are NOT the same IDs as when this
+// node ran the (now-abandoned) in-platform review flow. These are the
+// output_data keys the off-platform callback (API reference section 9.2)
+// expects on the POST to callback.url.
 const REVIEW_OUTPUT_VARS = {
-  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_l2h62ayew', // True/False
-  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_64b27ng02', // Text
+  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_9v243fvzr', // True/False
+  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_s33b5b7vu', // Text
 };
 
 const FAILURE_STATUSES = ['FAILED', 'CANCELLED', 'TIMED_OUT'];
@@ -438,7 +441,7 @@ const pendingReviewDispatches = new Map();
 
 app.post('/api/opus-webhook/human-review', (req, res) => {
   const body = req.body || {};
-  const { execution_id: jobId, callback, expected_output_schema: expectedOutputSchema } = body;
+  const { execution_id: jobId, callback, inputs, expected_output_schema: expectedOutputSchema } = body;
 
   console.log(`[hitl-dispatch] received for jobId=${jobId}`);
   // Full raw dump on first receipt - this is the one live look we get at
@@ -456,6 +459,7 @@ app.post('/api/opus-webhook/human-review', (req, res) => {
 
   pendingReviewDispatches.set(String(jobId), {
     callback,
+    inputs: inputs || {},
     expectedOutputSchema: expectedOutputSchema || {},
     workflowId: body.workflow_id,
     workflowName: body.workflow_name,
@@ -468,7 +472,12 @@ app.post('/api/opus-webhook/human-review', (req, res) => {
 app.get('/api/run/:id/review', (req, res) => {
   const jobId = req.params.id;
   const dispatch = pendingReviewDispatches.get(jobId);
-  res.json({ pending: Boolean(dispatch) });
+  if (!dispatch) return res.json({ pending: false });
+  res.json({
+    pending: true,
+    inputs: dispatch.inputs || {},
+    workflowName: dispatch.workflowName || null,
+  });
 });
 
 app.post('/api/run/:id/review', async (req, res) => {
