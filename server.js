@@ -48,18 +48,19 @@ const OUTPUT_VARS = {
 // "KYC Human Review" node's two declared outputs - read off the workflow
 // builder canvas directly, not discoverable through GET /workflow/{id} in
 // a way that's tied to this specific review step. These IDs have already
-// changed twice in one day (2026-08-31): once switching the node to
-// off-platform, then again after updating the node's webhook URL to add
-// the Vercel protection-bypass query param - Opus appears to regenerate
-// output IDs whenever this node's config is edited, not just on
-// platform-mode changes. If reviews start failing again with the outputs
-// coming back null, re-check these against the node's Outputs tab before
-// assuming the bug is elsewhere. These are the output_data keys the
-// off-platform callback (API reference section 9.2) expects on the POST
-// to callback.url.
+// changed three times in one day (2026-08-31): once switching the node to
+// off-platform, again after updating the node's webhook URL to add the
+// Vercel protection-bypass query param, and now a third time after the
+// node was recreated with a clean webhook URL (no query string this time)
+// - Opus appears to regenerate output IDs whenever this node's config is
+// edited, not just on platform-mode changes. If reviews start failing
+// again with the outputs coming back null, re-check these against the
+// node's Outputs tab before assuming the bug is elsewhere. These are the
+// output_data keys the off-platform callback (API reference section 9.2)
+// expects on the POST to callback.url.
 const REVIEW_OUTPUT_VARS = {
-  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_1zk0302kb', // True/False
-  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_bp18fzfq6', // Text
+  canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_2sesd1xfb', // True/False
+  comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_9ci0lorbf', // Text
 };
 
 const FAILURE_STATUSES = ['FAILED', 'CANCELLED', 'TIMED_OUT'];
