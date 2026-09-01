@@ -206,6 +206,7 @@ const resultsPanel = document.getElementById('results-panel');
 const resetBtn = document.getElementById('reset-btn');
 const backToRoleStatusBtn = document.getElementById('back-to-role-status-btn');
 const backToRoleResultsBtn = document.getElementById('back-to-role-results-btn');
+const backToRoleIntakeBtn = document.getElementById('back-to-role-intake-btn');
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -1190,10 +1191,11 @@ resetBtn.addEventListener('click', () => {
   setJobIdInUrl(null);
 });
 
-// "Back to role selection" - visible on the in-progress/polling view and
-// the Result view. Only resets what this browser tab is showing (stops
-// polling, clears currentRole, hides the intake form and the in-progress/
-// result/review/error panels, reopens the role gate) - it does not cancel
+// "Back to role selection" - visible on the intake form itself, the
+// in-progress/polling view, and the Result view. Only resets what this
+// browser tab is showing (stops polling, clears currentRole, hides the
+// intake form and the in-progress/result/review/error panels, reopens
+// the role gate) - it does not cancel
 // the job on Opus's side. There's no such thing as canceling it from this
 // app anyway: the API reference documents no cancel/stop endpoint for a
 // job in the Jobs domain (only /executor/execution/{id}/stop, a
@@ -1214,6 +1216,7 @@ function backToRoleSelection() {
 
 backToRoleStatusBtn.addEventListener('click', backToRoleSelection);
 backToRoleResultsBtn.addEventListener('click', backToRoleSelection);
+backToRoleIntakeBtn.addEventListener('click', backToRoleSelection);
 
 // Resume watching an in-flight job after a same-tab refresh, if the URL
 // still carries a ?job= param from before the reload. Skips straight past
