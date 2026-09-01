@@ -268,6 +268,7 @@ app.post('/api/run', async (req, res) => {
       }),
     });
     const { jobExecutionId } = await initRes.json();
+    currentJobId = jobExecutionId;
 
     // Wire format per API reference section 3: every value is {value, type},
     // type is always a bare string. Confirmed live against GET /api/schema:
@@ -443,6 +444,7 @@ app.get('/api/run/:id', async (req, res) => {
 // instances, since a Vercel deployment doesn't guarantee the dispatch and
 // the later submit hit the same warm instance).
 const pendingReviewDispatches = new Map();
+let currentJobId = null;
 
 app.post('/api/opus-webhook/human-review', (req, res) => {
   const body = req.body || {};
@@ -462,14 +464,24 @@ app.post('/api/opus-webhook/human-review', (req, res) => {
     return res.status(200).json({ received: true, warning: 'malformed dispatch, ignored' });
   }
 
-  pendingReviewDispatches.set(String(jobId), {
+  const dispatchRecord = {
     callback,
     inputs: inputs || {},
     expectedOutputSchema: expectedOutputSchema || {},
     workflowId: body.workflow_id,
     workflowName: body.workflow_name,
     receivedAt: Date.now(),
-  });
+  };
+
+  // Opus's dispatch execution_id is its own internal per-node execution UUID,
+  // not the jobExecutionId our /job/initiate call got back and that the
+  // frontend polls with. Store under both so GET /api/run/:id/review can
+  // find it. Assumes one job is in flight for human review at a time
+  // (true for this dev/test tool).
+  pendingReviewDispatches.set(String(jobId), dispatchRecord);
+  if (currentJobId) {
+    pendingReviewDispatches.set(String(currentJobId), dispatchRecord);
+  }
 
   res.status(200).json({ received: true });
 });
