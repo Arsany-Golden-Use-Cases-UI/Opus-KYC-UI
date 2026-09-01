@@ -150,6 +150,30 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+// Role gate for "who is running this case" (KYC Agent vs Compliance
+// Officer) - checks a password against AGENT_PASSWORD / MANAGER_PASSWORD
+// and returns ok:true/false. This only guards the frontend's own UI state
+// (see public/app.js's currentRole) - it does NOT add any check to
+// /api/run/:id/review itself, which still accepts a submission from
+// anyone who can reach this server regardless of role. If that route ever
+// needs real enforcement, it should require its own proof of the verified
+// role (e.g. a signed token issued here), not just trust client-side state.
+const ROLE_PASSWORDS = {
+  agent: process.env.AGENT_PASSWORD,
+  manager: process.env.MANAGER_PASSWORD,
+};
+
+app.post('/api/verify-role', (req, res) => {
+  const { role, password } = req.body || {};
+  const expected = ROLE_PASSWORDS[role];
+
+  if (!expected || typeof password !== 'string' || password !== expected) {
+    return res.status(401).json({ ok: false, error: 'Incorrect password' });
+  }
+
+  res.json({ ok: true });
+});
+
 // Thin wrapper around fetch() for calls to the Opus API: attaches auth, retries
 // 429/5xx with backoff (per the API reference, section 11), and throws on other errors.
 async function opusFetch(reqPath, options = {}, { retries = 3 } = {}) {

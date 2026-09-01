@@ -226,6 +226,54 @@ img {
   display: none;
 }
 
+/* ---------- Role gate: who is running this case? ---------- */
+/* A modal overlay (see app.js's openRoleGate()) that sits on top of the
+   app shell - fixed positioning means it doesn't matter where it lives in
+   the DOM, but it's placed right after #app-view's own opening tag so it
+   reads as "gates everything below it." Reuses .card/.btn/.field/
+   .error-banner rather than inventing new visual language. */
+.role-gate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 24, 24, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 1000;
+}
+
+.role-gate-overlay[hidden] {
+  display: none;
+}
+
+.role-gate-card {
+  max-width: 420px;
+  width: 100%;
+}
+
+.role-gate-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.role-gate-choices .btn {
+  margin-top: 0;
+}
+
+.role-gate-password-step {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.role-gate-password-step .btn {
+  margin-top: 0;
+}
+
 /* ---------- App shell: sidebar + main (ADDED 2026-08-31) ---------- */
 /* "Similar, not a clone" of the reference dashboard's shell: a persistent
    left nav switching between page-panels (see the data-view / [data-view-panel]
@@ -443,6 +491,7 @@ label {
 }
 
 input[type="file"],
+input[type="password"],
 textarea {
   width: 100%;
   padding: 0.65rem 0.8rem;

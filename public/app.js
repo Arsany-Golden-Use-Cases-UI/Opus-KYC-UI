@@ -8,6 +8,108 @@ startBtn.addEventListener('click', () => {
 });
 
 // ============================================================
+// Role gate: who is running this case? (KYC Agent / Compliance Officer)
+// ============================================================
+// currentRole persists only for this page's JS session (a plain variable,
+// not sessionStorage/localStorage) - it resets to null on every reload,
+// including the same-tab-refresh resume path further down. See
+// server.js's /api/verify-role comment: this is a client-side UI gate
+// only, not real access control on the routes it's meant to protect.
+let currentRole = null;
+let roleGateOnVerified = null;
+let pendingRoleChoice = null; // 'agent' | 'manager', chosen but not yet verified
+
+const roleGateOverlay = document.getElementById('role-gate');
+const roleGateChoices = document.getElementById('role-gate-choices');
+const roleChoiceAgentBtn = document.getElementById('role-choice-agent');
+const roleChoiceManagerBtn = document.getElementById('role-choice-manager');
+const roleGatePasswordStep = document.getElementById('role-gate-password-step');
+const roleGatePasswordInput = document.getElementById('role-gate-password');
+const roleGateError = document.getElementById('role-gate-error');
+const roleGateSubmitBtn = document.getElementById('role-gate-submit-btn');
+const roleGateChooseAgainBtn = document.getElementById('role-gate-choose-again-btn');
+
+// Opens the role gate overlay at the role-choice step. onVerified runs once,
+// right after a correct password closes the gate - callers decide what
+// "proceed" means (start the run that was pending, or nothing at all when
+// reached via "Back to role selection").
+function openRoleGate(onVerified) {
+  roleGateOnVerified = onVerified || null;
+  pendingRoleChoice = null;
+  roleGateChoices.hidden = false;
+  roleGatePasswordStep.hidden = true;
+  roleGatePasswordInput.value = '';
+  roleGateError.hidden = true;
+  roleGateError.textContent = '';
+  roleGateSubmitBtn.disabled = false;
+  roleGateSubmitBtn.textContent = 'Continue';
+  roleGateOverlay.hidden = false;
+}
+
+function closeRoleGate() {
+  roleGateOverlay.hidden = true;
+  pendingRoleChoice = null;
+}
+
+function chooseRole(role) {
+  pendingRoleChoice = role;
+  roleGateChoices.hidden = true;
+  roleGatePasswordStep.hidden = false;
+  roleGateError.hidden = true;
+  roleGatePasswordInput.value = '';
+  roleGatePasswordInput.focus();
+}
+
+roleChoiceAgentBtn.addEventListener('click', () => chooseRole('agent'));
+roleChoiceManagerBtn.addEventListener('click', () => chooseRole('manager'));
+
+roleGateChooseAgainBtn.addEventListener('click', () => {
+  pendingRoleChoice = null;
+  roleGatePasswordStep.hidden = true;
+  roleGateChoices.hidden = false;
+});
+
+roleGatePasswordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    roleGateSubmitBtn.click();
+  }
+});
+
+roleGateSubmitBtn.addEventListener('click', async () => {
+  if (!pendingRoleChoice) return;
+  roleGateError.hidden = true;
+  roleGateSubmitBtn.disabled = true;
+  roleGateSubmitBtn.textContent = 'Checking…';
+
+  try {
+    const res = await fetch('/api/verify-role', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: pendingRoleChoice, password: roleGatePasswordInput.value }),
+    });
+    const data = await res.json();
+
+    if (res.ok && data.ok) {
+      currentRole = pendingRoleChoice;
+      const onVerified = roleGateOnVerified;
+      closeRoleGate();
+      onVerified?.();
+    } else {
+      roleGateError.textContent = 'Incorrect password, try again.';
+      roleGateError.hidden = false;
+      roleGateSubmitBtn.disabled = false;
+      roleGateSubmitBtn.textContent = 'Continue';
+    }
+  } catch (err) {
+    roleGateError.textContent = 'Something went wrong checking the password.';
+    roleGateError.hidden = false;
+    roleGateSubmitBtn.disabled = false;
+    roleGateSubmitBtn.textContent = 'Continue';
+  }
+});
+
+// ============================================================
 // Tab shell: sidebar navigation between the app's views.
 // ============================================================
 const navItems = Array.from(document.querySelectorAll('.nav-item'));
@@ -75,6 +177,7 @@ const progressBarFill = document.getElementById('progress-bar-fill');
 const progressBarRunning = document.getElementById('progress-bar-running');
 const statusStepPills = document.getElementById('status-step-pills');
 const reviewPanel = document.getElementById('review-panel');
+const reviewReadonlyPanel = document.getElementById('review-readonly-panel');
 const reviewApproveBtn = document.getElementById('review-approve-btn');
 const reviewRejectBtn = document.getElementById('review-reject-btn');
 const reviewComments = document.getElementById('review-comments');
@@ -85,6 +188,8 @@ const errorStatus = document.getElementById('error-status');
 const errorNodes = document.getElementById('error-nodes');
 const resultsPanel = document.getElementById('results-panel');
 const resetBtn = document.getElementById('reset-btn');
+const backToRoleStatusBtn = document.getElementById('back-to-role-status-btn');
+const backToRoleResultsBtn = document.getElementById('back-to-role-results-btn');
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -282,6 +387,25 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
+  const runArgs = { idDocumentFile, proofOfAddressFile, applicationFormJson, screeningPolicy };
+
+  // Role gate: the first run in this page session requires picking a role
+  // and entering its password (see openRoleGate() above). Once currentRole
+  // is set it persists for the rest of the session, so later runs skip
+  // straight to startRun() - matches the pre-role-gate behavior exactly.
+  if (!currentRole) {
+    openRoleGate(() => startRun(runArgs));
+    return;
+  }
+
+  startRun(runArgs);
+});
+
+// The upload+run flow itself - unchanged from before role gating was added,
+// just extracted into its own function so it can run either immediately
+// (role already verified this session) or as the openRoleGate() callback
+// once a password is confirmed.
+async function startRun({ idDocumentFile, proofOfAddressFile, applicationFormJson, screeningPolicy }) {
   setBusy(true);
   resultsPanel.hidden = true;
   errorPanel.hidden = true;
@@ -314,7 +438,7 @@ form.addEventListener('submit', async (e) => {
     statusPanel.hidden = true;
     showError(err.message || 'Something went wrong.');
   }
-});
+}
 
 // ---------------------------------------------------------------------
 // In-platform Human Review (see server.js's GET/POST /api/run/:id/review
@@ -338,6 +462,7 @@ reviewRejectBtn.addEventListener('click', () => setReviewChoice(false));
 
 function resetReview() {
   reviewPanel.hidden = true;
+  reviewReadonlyPanel.hidden = true;
   reviewError.hidden = true;
   reviewError.textContent = '';
   reviewComments.value = '';
@@ -422,7 +547,7 @@ function renderReviewInputs(inputs) {
 }
 
 async function maybeCheckForReview(jobId) {
-  if (reviewCheckInFlight || !reviewPanel.hidden) return;
+  if (reviewCheckInFlight || !reviewPanel.hidden || !reviewReadonlyPanel.hidden) return;
   reviewCheckInFlight = true;
   try {
     const res = await fetch(`/api/run/${jobId}/review`);
@@ -432,8 +557,17 @@ async function maybeCheckForReview(jobId) {
     // dispatch is keyed by jobId directly, so `pending` alone is the signal.
     if (data.pending) {
       currentReviewJobId = jobId;
-      renderReviewInputs(data.inputs || {});
-      reviewPanel.hidden = false;
+      // Only a verified Compliance Officer sees the interactive Approve/
+      // Reject card - anyone else (KYC Agent, or no role set, e.g. after a
+      // same-tab refresh resets currentRole) gets a read-only notice
+      // instead. This is a client-side-only check - see server.js's
+      // /api/verify-role comment on what it doesn't protect.
+      if (currentRole === 'manager') {
+        renderReviewInputs(data.inputs || {});
+        reviewPanel.hidden = false;
+      } else {
+        reviewReadonlyPanel.hidden = false;
+      }
     }
   } catch (err) {
     // Swallow - this is a best-effort check layered on top of the main
@@ -1045,6 +1179,30 @@ resetBtn.addEventListener('click', () => {
   clearError();
   setJobIdInUrl(null);
 });
+
+// "Back to role selection" - visible on the in-progress/polling view and
+// the Result view. Only resets what this browser tab is showing (stops
+// polling, clears currentRole, hides the in-progress/result/review/error
+// panels, reopens the role gate) - it does not cancel the job on Opus's
+// side. There's no such thing as canceling it from this app anyway: the
+// API reference documents no cancel/stop endpoint for a job in the Jobs
+// domain (only /executor/execution/{id}/stop, a lower-level, unconfirmed
+// surface - see API reference §4.7).
+function backToRoleSelection() {
+  stopPolling();
+  currentRole = null;
+  setBusy(false);
+  statusPanel.hidden = true;
+  resultsPanel.hidden = true;
+  errorPanel.hidden = true;
+  resetProgress();
+  resetReview();
+  setJobIdInUrl(null);
+  openRoleGate(null);
+}
+
+backToRoleStatusBtn.addEventListener('click', backToRoleSelection);
+backToRoleResultsBtn.addEventListener('click', backToRoleSelection);
 
 // Resume watching an in-flight job after a same-tab refresh, if the URL
 // still carries a ?job= param from before the reload. Skips straight past

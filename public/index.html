@@ -23,6 +23,32 @@
   </section>
 
   <div id="app-view" class="app-view" hidden>
+
+  <!-- ============== Role gate: who is running this case? ============== -->
+  <div id="role-gate" class="role-gate-overlay" hidden>
+    <section class="card role-gate-card">
+      <h2 class="card-title">Who is running this case?</h2>
+      <p class="subtitle">Select your role to continue.</p>
+
+      <div id="role-gate-choices" class="role-gate-choices">
+        <button type="button" id="role-choice-agent" class="btn btn-secondary">KYC Agent</button>
+        <button type="button" id="role-choice-manager" class="btn btn-secondary">Compliance Officer</button>
+      </div>
+
+      <div id="role-gate-password-step" class="role-gate-password-step" hidden>
+        <div class="field">
+          <label for="role-gate-password">Password</label>
+          <input type="password" id="role-gate-password" autocomplete="off">
+        </div>
+
+        <div id="role-gate-error" class="error-banner" hidden></div>
+
+        <button type="button" id="role-gate-submit-btn" class="btn btn-primary">Continue</button>
+        <button type="button" id="role-gate-choose-again-btn" class="btn btn-secondary">Choose a different role</button>
+      </div>
+    </section>
+  </div>
+
   <div class="app-shell">
 
     <aside class="app-sidebar">
@@ -129,6 +155,8 @@
               </div>
               <div id="status-step-pills" class="status-step-pills"></div>
             </div>
+
+            <button type="button" id="back-to-role-status-btn" class="btn btn-secondary">Back to role selection</button>
           </div>
 
           <section id="review-panel" class="card review-card" hidden>
@@ -157,6 +185,14 @@
 
             <button type="button" id="review-submit-btn" class="btn btn-primary">Continue</button>
             <p class="btn-caption">Reviews expire quickly — the case restarts from scratch if this isn't submitted in time.</p>
+          </section>
+
+          <!-- Shown instead of #review-panel when currentRole !== "manager" - see
+               maybeCheckForReview() in app.js. No interactive controls: a KYC
+               Agent can see that a review is pending but not act on it. -->
+          <section id="review-readonly-panel" class="card review-card" hidden>
+            <h2 class="card-title">⏳ Awaiting Compliance Officer Review</h2>
+            <p class="subtitle">This case has been escalated for compliance review. A Compliance Officer must approve or reject it before the case can proceed.</p>
           </section>
 
           <section id="error-panel" class="card error-card" hidden>
@@ -190,6 +226,7 @@
             </div>
 
             <button id="reset-btn" type="button" class="btn btn-secondary">Run Another</button>
+            <button type="button" id="back-to-role-results-btn" class="btn btn-secondary">Back to role selection</button>
           </section>
 
           <p class="page-footer"><strong>Banking KYC Console</strong> · built on the Opus Jobs API</p>
