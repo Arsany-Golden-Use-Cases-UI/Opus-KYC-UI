@@ -455,6 +455,7 @@ app.post('/api/opus-webhook/human-review', (req, res) => {
   // expected_output_schema's real shape (see UNVERIFIED note above). Keep
   // this until that's confirmed once.
   console.log('[hitl-dispatch] raw payload:', JSON.stringify(body));
+  console.log('[hitl-dispatch] currentJobId at receipt:', currentJobId);
 
   if (!jobId || !callback || !callback.url || !callback.token) {
     console.error('[hitl-dispatch] malformed dispatch - missing execution_id or callback info', body);
