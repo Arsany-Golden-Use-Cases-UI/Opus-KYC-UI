@@ -78,9 +78,17 @@
               <span class="brand-subtitle">Compliance Ops</span>
             </span>
           </div>
-          <div class="header-status" title="This instance is configured against the Opus workflow API">
-            <span class="status-dot"></span>
-            Workflow Linked
+          <div class="header-right">
+            <!-- Single shared button for all three former per-view "Back to
+                 role selection" buttons - see backToRoleSelection() /
+                 revealIntakeForm() in app.js, which toggle this alongside
+                 #intake-form-card so it tracks the same "role verified"
+                 state instead of three separately-wired copies. -->
+            <button type="button" id="back-to-role-btn" class="btn btn-secondary header-back-btn" hidden>Back to role selection</button>
+            <div class="header-status" title="This instance is configured against the Opus workflow API">
+              <span class="status-dot"></span>
+              Workflow Linked
+            </div>
           </div>
         </div>
       </header>
@@ -110,8 +118,6 @@
             <p class="card-eyebrow">Banking KYC / New Intake</p>
             <h1 class="card-title">Submit a Case</h1>
             <p class="subtitle">Upload documents and run the KYC screening workflow.</p>
-
-            <button type="button" id="back-to-role-intake-btn" class="btn btn-secondary">Back to role selection</button>
 
             <form id="kyc-form">
               <div class="field">
@@ -161,8 +167,6 @@
               </div>
               <div id="status-step-pills" class="status-step-pills"></div>
             </div>
-
-            <button type="button" id="back-to-role-status-btn" class="btn btn-secondary">Back to role selection</button>
           </div>
 
           <section id="review-panel" class="card review-card" hidden>
@@ -232,7 +236,6 @@
             </div>
 
             <button id="reset-btn" type="button" class="btn btn-secondary">Run Another</button>
-            <button type="button" id="back-to-role-results-btn" class="btn btn-secondary">Back to role selection</button>
           </section>
 
           <p class="page-footer"><strong>Banking KYC Console</strong> · built on the Opus Jobs API</p>

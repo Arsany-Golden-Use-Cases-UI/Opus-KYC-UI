@@ -88,6 +88,41 @@ img {
   min-width: 0;
 }
 
+/* Right-hand cluster of the header: the "Back to role selection" button
+   (when visible) sits next to the WORKFLOW LINKED badge instead of each
+   getting its own row - grouped together so `justify-content: space-between`
+   on .app-header-inner treats them as one unit on the right, opposite
+   .brand on the left. */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+/* Compact variant of .btn/.btn-secondary for the header's tight vertical
+   space - overrides .btn's block/full-width default with an inline pill
+   roughly matching .header-status's height, small enough to sit beside the
+   badge without overflowing the header on typical widths. */
+.header-back-btn {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Same author-vs-UA-stylesheet [hidden] issue as elsewhere in this file:
+   .header-back-btn sets its own `display`, so [hidden] needs an explicit
+   override or the button would stay visible regardless of the hidden
+   attribute JS sets on it. */
+.header-back-btn[hidden] {
+  display: none;
+}
+
 /* Small connection-status pill in the header, echoing the "WORKFLOW
    LINKED" indicator from the reference dashboard - static/decorative
    (this app has one fixed workflow connection, not a settings screen to

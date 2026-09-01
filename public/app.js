@@ -179,6 +179,7 @@ const intakeFormCard = document.getElementById('intake-form-card');
 // load time and in backToRoleSelection() below.
 function revealIntakeForm() {
   intakeFormCard.hidden = false;
+  backToRoleBtn.hidden = false;
 }
 
 const form = document.getElementById('kyc-form');
@@ -204,9 +205,11 @@ const errorStatus = document.getElementById('error-status');
 const errorNodes = document.getElementById('error-nodes');
 const resultsPanel = document.getElementById('results-panel');
 const resetBtn = document.getElementById('reset-btn');
-const backToRoleStatusBtn = document.getElementById('back-to-role-status-btn');
-const backToRoleResultsBtn = document.getElementById('back-to-role-results-btn');
-const backToRoleIntakeBtn = document.getElementById('back-to-role-intake-btn');
+// Single shared button in the header (see index.html) replacing what used
+// to be three separately-wired copies (intake form, status panel, results
+// panel) - its visibility now just tracks intakeFormCard's, toggled
+// alongside it in revealIntakeForm()/backToRoleSelection() below.
+const backToRoleBtn = document.getElementById('back-to-role-btn');
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -1191,20 +1194,23 @@ resetBtn.addEventListener('click', () => {
   setJobIdInUrl(null);
 });
 
-// "Back to role selection" - visible on the intake form itself, the
-// in-progress/polling view, and the Result view. Only resets what this
-// browser tab is showing (stops polling, clears currentRole, hides the
-// intake form and the in-progress/result/review/error panels, reopens
-// the role gate) - it does not cancel
-// the job on Opus's side. There's no such thing as canceling it from this
-// app anyway: the API reference documents no cancel/stop endpoint for a
-// job in the Jobs domain (only /executor/execution/{id}/stop, a
-// lower-level, unconfirmed surface - see API reference §4.7).
+// "Back to role selection" - the single shared header button (#back-to-role-btn),
+// visible whenever a role is verified regardless of which view is showing
+// (intake form, in-progress/polling, or Result - see revealIntakeForm()
+// above, which is where it's un-hidden). Only resets what this browser tab
+// is showing (stops polling, clears currentRole, hides the intake form and
+// the in-progress/result/review/error panels, reopens the role gate) - it
+// does not cancel the job on Opus's side. There's no such thing as
+// canceling it from this app anyway: the API reference documents no
+// cancel/stop endpoint for a job in the Jobs domain (only
+// /executor/execution/{id}/stop, a lower-level, unconfirmed surface - see
+// API reference §4.7).
 function backToRoleSelection() {
   stopPolling();
   currentRole = null;
   setBusy(false);
   intakeFormCard.hidden = true;
+  backToRoleBtn.hidden = true;
   statusPanel.hidden = true;
   resultsPanel.hidden = true;
   errorPanel.hidden = true;
@@ -1214,9 +1220,7 @@ function backToRoleSelection() {
   openRoleGate(revealIntakeForm);
 }
 
-backToRoleStatusBtn.addEventListener('click', backToRoleSelection);
-backToRoleResultsBtn.addEventListener('click', backToRoleSelection);
-backToRoleIntakeBtn.addEventListener('click', backToRoleSelection);
+backToRoleBtn.addEventListener('click', backToRoleSelection);
 
 // Resume watching an in-flight job after a same-tab refresh, if the URL
 // still carries a ?job= param from before the reload. Skips straight past
