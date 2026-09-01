@@ -102,7 +102,11 @@
 
         <!-- ============== New Intake (the real, functional page) ============== -->
         <section class="view-panel intake-narrow" data-view-panel="intake">
-          <section class="card">
+          <!-- Hidden until a role is verified - see revealIntakeForm() /
+               openRoleGate() in app.js. Not visible behind or before the
+               role gate: it starts hidden in the markup itself, not just
+               via JS after the fact. -->
+          <section class="card" id="intake-form-card" hidden>
             <p class="card-eyebrow">Banking KYC / New Intake</p>
             <h1 class="card-title">Submit a Case</h1>
             <p class="subtitle">Upload documents and run the KYC screening workflow.</p>

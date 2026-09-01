@@ -109,6 +109,14 @@ roleGateSubmitBtn.addEventListener('click', async () => {
   }
 });
 
+// Open the role gate immediately on page load - it's the first thing a
+// visitor sees, before the intake form (hidden by default in the markup -
+// see #intake-form-card) is ever revealed. revealIntakeForm is a plain
+// function declaration further down, safe to reference here since it's
+// hoisted and won't actually run until the user submits a correct
+// password, well after this whole script has finished its initial pass.
+openRoleGate(revealIntakeForm);
+
 // ============================================================
 // Tab shell: sidebar navigation between the app's views.
 // ============================================================
@@ -164,6 +172,14 @@ function loadViewData(viewName) {
 navItems.forEach((btn) => {
   btn.addEventListener('click', () => switchToView(btn.dataset.view));
 });
+
+const intakeFormCard = document.getElementById('intake-form-card');
+
+// Revealed only once a role is verified - see the openRoleGate() calls at
+// load time and in backToRoleSelection() below.
+function revealIntakeForm() {
+  intakeFormCard.hidden = false;
+}
 
 const form = document.getElementById('kyc-form');
 const submitBtn = document.getElementById('submit-btn');
@@ -389,15 +405,9 @@ form.addEventListener('submit', async (e) => {
 
   const runArgs = { idDocumentFile, proofOfAddressFile, applicationFormJson, screeningPolicy };
 
-  // Role gate: the first run in this page session requires picking a role
-  // and entering its password (see openRoleGate() above). Once currentRole
-  // is set it persists for the rest of the session, so later runs skip
-  // straight to startRun() - matches the pre-role-gate behavior exactly.
-  if (!currentRole) {
-    openRoleGate(() => startRun(runArgs));
-    return;
-  }
-
+  // No role check here anymore - the role gate now runs at page load
+  // (before the intake form is even revealed), so by the time this button
+  // is visible/clickable, currentRole is already verified.
   startRun(runArgs);
 });
 
@@ -1182,23 +1192,24 @@ resetBtn.addEventListener('click', () => {
 
 // "Back to role selection" - visible on the in-progress/polling view and
 // the Result view. Only resets what this browser tab is showing (stops
-// polling, clears currentRole, hides the in-progress/result/review/error
-// panels, reopens the role gate) - it does not cancel the job on Opus's
-// side. There's no such thing as canceling it from this app anyway: the
-// API reference documents no cancel/stop endpoint for a job in the Jobs
-// domain (only /executor/execution/{id}/stop, a lower-level, unconfirmed
-// surface - see API reference §4.7).
+// polling, clears currentRole, hides the intake form and the in-progress/
+// result/review/error panels, reopens the role gate) - it does not cancel
+// the job on Opus's side. There's no such thing as canceling it from this
+// app anyway: the API reference documents no cancel/stop endpoint for a
+// job in the Jobs domain (only /executor/execution/{id}/stop, a
+// lower-level, unconfirmed surface - see API reference §4.7).
 function backToRoleSelection() {
   stopPolling();
   currentRole = null;
   setBusy(false);
+  intakeFormCard.hidden = true;
   statusPanel.hidden = true;
   resultsPanel.hidden = true;
   errorPanel.hidden = true;
   resetProgress();
   resetReview();
   setJobIdInUrl(null);
-  openRoleGate(null);
+  openRoleGate(revealIntakeForm);
 }
 
 backToRoleStatusBtn.addEventListener('click', backToRoleSelection);
