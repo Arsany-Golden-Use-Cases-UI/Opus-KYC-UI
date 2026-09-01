@@ -530,11 +530,11 @@ app.post('/api/run/:id/review', async (req, res) => {
     const outputData = {
       [REVIEW_OUTPUT_VARS.canApprove]: {
         value: canApprove,
-        type: typeFor(REVIEW_OUTPUT_VARS.canApprove, { type: 'boolean', type_definition: null }),
+        type: typeFor(REVIEW_OUTPUT_VARS.canApprove, { type: 'bool', type_definition: null }),
       },
       [REVIEW_OUTPUT_VARS.comments]: {
         value: comments || '',
-        type: typeFor(REVIEW_OUTPUT_VARS.comments, { type: 'string', type_definition: null }),
+        type: typeFor(REVIEW_OUTPUT_VARS.comments, { type: 'str', type_definition: null }),
       },
     };
 
