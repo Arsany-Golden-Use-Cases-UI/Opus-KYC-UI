@@ -1213,23 +1213,6 @@ details summary {
   background: var(--color-surface-muted);
 }
 
-/* Small "this isn't real yet" flag on the Reports tab. */
-.sample-data-badge {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  margin-right: 0.5rem;
-  vertical-align: middle;
-}
-
 /* ---------- Pending Reviews ---------- */
 
 .review-queue-list {

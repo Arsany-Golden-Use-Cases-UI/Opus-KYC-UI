@@ -1501,18 +1501,99 @@ function startCaseDetailPolling(jobId) {
 }
 
 // ============================================================
-// Reports: invented sample data - preview only.
+// Reports: real management-information stats, computed client-side from
+// the same GET /api/case-history entries Case Queue/My Cases already
+// fetch (see fetchCaseHistory()/renderQueueStats() above) - no dedicated
+// endpoint, consistent with that existing pattern; case history is a
+// single small Redis blob, already loaded in full everywhere else. Scoped
+// to the current calendar month throughout, so every tile/row describes
+// the same period rather than mixing an all-time figure next to a
+// monthly one.
+//
+// Risk Tier Mix (a prior sample-data placeholder) was dropped rather than
+// built: a risk rating only ever appears, if at all, inside Opus's free-
+// text auditSummary/caseFile output, neither of which is even persisted
+// to case history (only finalDecision/routingFlag/status are) - no
+// reliable structured source exists to build it from.
 // ============================================================
-function renderReports() {
+
+// finalDecision/routingFlag are free strings straight from Opus's Output
+// node - the exact value set has never been confirmed live (see README's
+// own "possible values aren't confirmed" note). Same case-insensitive
+// keyword matching already used for badge coloring elsewhere (see
+// TONE_RULES above), not an exact-match enum.
+const REPORTS_APPROVE_PATTERN = /approve|pass|clear|accept/i;
+const REPORTS_REJECT_PATTERN = /reject|declin|deny|fail/i;
+
+function isThisMonth(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
+
+// COMPLETED cases this month only, for both the turnaround average and
+// the outcome breakdown - an IN_PROGRESS/WAITING_REVIEW case has no
+// decision or final turnaround yet, and a FAILED/CANCELLED/TIMED_OUT one
+// isn't an automation decision, it's an error, so neither belongs here.
+function computeReportsStats(entries) {
+  const thisMonth = entries.filter((e) => isThisMonth(e.submittedAt));
+  const completedThisMonth = thisMonth.filter((e) => e.status === 'COMPLETED');
+
+  const avgTurnaroundMs = completedThisMonth.length
+    ? completedThisMonth.reduce((sum, e) => {
+        return sum + (new Date(e.completedAt).getTime() - new Date(e.submittedAt).getTime());
+      }, 0) / completedThisMonth.length
+    : null;
+
+  // reviewedBy is our own reliable, structured signal for "a human
+  // decided this" - set only when a real HITL review was actually
+  // submitted (see server.js's POST /api/run/:id/review) - so it's
+  // checked first and takes priority over finalDecision keyword-matching,
+  // which only ever splits whatever's left into Approved/Rejected.
+  // Anything finalDecision doesn't clearly match either pattern for
+  // defaults into Human Review too, rather than risk silently
+  // mis-bucketing an unrecognized value as a confident Approved/Rejected.
+  const outcomeCounts = { Approved: 0, 'Human Review': 0, Rejected: 0 };
+  completedThisMonth.forEach((e) => {
+    if (e.reviewedBy) {
+      outcomeCounts['Human Review'] += 1;
+    } else if (e.finalDecision && REPORTS_APPROVE_PATTERN.test(e.finalDecision)) {
+      outcomeCounts.Approved += 1;
+    } else if (e.finalDecision && REPORTS_REJECT_PATTERN.test(e.finalDecision)) {
+      outcomeCounts.Rejected += 1;
+    } else {
+      outcomeCounts['Human Review'] += 1;
+    }
+  });
+
+  return {
+    casesThisMonth: thisMonth.length,
+    avgTurnaroundMs,
+    completedThisMonthCount: completedThisMonth.length,
+    outcomeCounts,
+  };
+}
+
+async function renderReports() {
   const statsEl = document.getElementById('reports-stats');
   const breakdownsEl = document.getElementById('reports-breakdowns');
   if (!statsEl || !breakdownsEl) return;
 
+  let entries;
+  try {
+    entries = await fetchCaseHistory();
+  } catch (err) {
+    statsEl.textContent = 'Could not load report data.';
+    breakdownsEl.innerHTML = '';
+    return;
+  }
+
+  const { casesThisMonth, avgTurnaroundMs, completedThisMonthCount, outcomeCounts } = computeReportsStats(entries);
+
   const stats = [
-    { label: 'Cases This Month', value: '164' },
-    { label: 'Avg. Turnaround', value: '6m 40s' },
-    { label: 'Auto-Approved', value: '71%' },
-    { label: 'Escalated to Review', value: '12%' },
+    { label: 'Cases This Month', value: String(casesThisMonth) },
+    { label: 'Avg. Turnaround', value: avgTurnaroundMs === null ? '—' : formatDuration(avgTurnaroundMs) },
   ];
 
   statsEl.innerHTML = '';
@@ -1530,22 +1611,17 @@ function renderReports() {
     statsEl.appendChild(div);
   });
 
+  // pct is null (rendered as '—', zero-width bar) rather than 0 when
+  // there are no completed cases this month at all - distinct from a
+  // genuine 0% outcome (completed cases exist, just none landed in this
+  // bucket).
   const breakdowns = [
     {
-      title: 'Risk Tier Mix',
-      rows: [
-        { label: 'Low', pct: 58 },
-        { label: 'Medium', pct: 29 },
-        { label: 'High', pct: 13 },
-      ],
-    },
-    {
       title: 'Automation Outcome',
-      rows: [
-        { label: 'Approved', pct: 71 },
-        { label: 'Human Review', pct: 21 },
-        { label: 'Rejected', pct: 8 },
-      ],
+      rows: ['Approved', 'Human Review', 'Rejected'].map((label) => ({
+        label,
+        pct: completedThisMonthCount ? Math.round((outcomeCounts[label] / completedThisMonthCount) * 100) : null,
+      })),
     },
   ];
 
@@ -1571,12 +1647,12 @@ function renderReports() {
       track.className = 'report-bar-track';
       const fill = document.createElement('div');
       fill.className = 'report-bar-fill';
-      fill.style.width = `${row.pct}%`;
+      fill.style.width = `${row.pct ?? 0}%`;
       track.appendChild(fill);
 
       const value = document.createElement('div');
       value.className = 'report-row-value';
-      value.textContent = `${row.pct}%`;
+      value.textContent = row.pct === null ? '—' : `${row.pct}%`;
 
       rowEl.appendChild(label);
       rowEl.appendChild(track);

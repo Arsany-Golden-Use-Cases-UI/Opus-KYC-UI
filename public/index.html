@@ -373,14 +373,12 @@
           <div id="pending-reviews-list" class="review-queue-list"></div>
         </section>
 
-        <!-- ============== Reports (sample/mock data - preview only) ============== -->
+        <!-- ============== Reports (real data, computed client-side from
+             /api/case-history - see renderReports() in app.js) ============== -->
         <section class="view-panel" data-view-panel="reports" hidden>
           <p class="card-eyebrow">Banking KYC / Reports</p>
           <h1 class="page-title">Management information</h1>
-          <p class="subtitle">
-            <span class="sample-data-badge">Sample data</span>
-            Preview only — illustrative figures, not computed from real cases.
-          </p>
+          <p class="subtitle">This calendar month, computed from real case history.</p>
 
           <div id="reports-stats" class="stat-tile-row"></div>
           <div id="reports-breakdowns" class="report-grid"></div>
