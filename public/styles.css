@@ -487,6 +487,17 @@ img {
   width: 100%;
 }
 
+/* Human Review card: wider than New Intake's form (640px felt cramped,
+   with long-text fields like Human Readable Summary wrapping awkwardly
+   and a lot of empty space either side) but still capped well short of
+   .content's full 1180px, so text doesn't stretch into hard-to-read
+   full-width lines. */
+.review-wide {
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+
 /* Case Detail: inputs (left) + whichever status-dependent outcome applies
    (right), side by side. Single column once the two cards would otherwise
    get too cramped to read comfortably. */
