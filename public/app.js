@@ -757,7 +757,17 @@ async function loadAndShowReview(jobId) {
 }
 
 async function maybeCheckForReview(jobId) {
-  if (reviewCheckInFlight || !reviewPanel.hidden || !reviewReadonlyPanel.hidden) return;
+  // Deliberately NOT bailing out just because reviewReadonlyPanel is
+  // already showing (unlike reviewPanel below) - a previously-pending
+  // review can get resolved from somewhere else entirely (another
+  // tab/session's interactive submit, or Pending Reviews/Case Detail) at
+  // any point while this poll loop keeps running, and the notice needs to
+  // keep being re-checked so it can clear once that happens - see the
+  // `else if` branch below. Bug fixed 2026-09-02: this used to also bail
+  // out once the notice was shown, so it never looked again for the rest
+  // of the poll loop's life, even long after the review was actually
+  // resolved and the job kept right on progressing underneath it.
+  if (reviewCheckInFlight || !reviewPanel.hidden) return;
   reviewCheckInFlight = true;
   try {
     // Only a verified Compliance Officer sees the interactive Approve/
@@ -773,6 +783,12 @@ async function maybeCheckForReview(jobId) {
       if (data.pending) {
         currentReviewJobId = jobId;
         reviewReadonlyPanel.hidden = false;
+      } else if (!reviewReadonlyPanel.hidden) {
+        // Was pending as of the last check, isn't anymore - clear the
+        // stale notice rather than leaving it stuck showing forever (see
+        // the bug note above).
+        reviewReadonlyPanel.hidden = true;
+        currentReviewJobId = null;
       }
     }
   } catch (err) {
@@ -863,16 +879,10 @@ function pollStatus(jobId) {
       consecutiveFailures = 0;
 
       if (data.status === 'COMPLETED') {
-        stopPolling();
-        setBusy(false);
-        statusPanel.hidden = true;
-        setJobIdInUrl(null);
+        teardownPolling();
         showResults(data.outputs);
       } else if (['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(data.status)) {
-        stopPolling();
-        setBusy(false);
-        statusPanel.hidden = true;
-        setJobIdInUrl(null);
+        teardownPolling();
         showFailure(data);
       } else {
         statusText.textContent = `Processing (${data.status})…`;
@@ -888,10 +898,7 @@ function pollStatus(jobId) {
       console.error(`poll error (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`, err);
 
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        stopPolling();
-        setBusy(false);
-        statusPanel.hidden = true;
-        setJobIdInUrl(null);
+        teardownPolling();
         showError(err.message || 'Something went wrong while polling.');
       } else {
         // Transient - surface it in the status line without tearing down
@@ -925,6 +932,24 @@ function stopPolling() {
     pollTimer = null;
   }
   stopElapsedTimer();
+}
+
+// Shared teardown for all three ways New Intake's poll loop can end
+// (COMPLETED, a failure status, or giving up after repeated errors) - see
+// poll() in pollStatus() above. Clearing reviewReadonlyPanel here is
+// necessary, not just belt-and-suspenders: once stopPolling() runs, there
+// is no next tick left for maybeCheckForReview() to ever re-check and
+// clear it on its own (that fix only covers a review getting resolved
+// while the job is still in progress) - without this, a stale "Awaiting
+// Compliance Officer Review" notice would be stranded on screen forever,
+// right next to the Result/error card that just replaced it.
+function teardownPolling() {
+  stopPolling();
+  setBusy(false);
+  statusPanel.hidden = true;
+  setJobIdInUrl(null);
+  reviewReadonlyPanel.hidden = true;
+  currentReviewJobId = null;
 }
 
 // `elements` defaults to New Intake's own error elements; the case-detail
