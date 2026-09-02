@@ -455,34 +455,46 @@ app.get('/api/run/:id/inputs', async (req, res) => {
     const jobId = req.params.id;
     const detailRes = await opusFetch(`/job/${jobId}`);
     const detail = await detailRes.json();
-    const rawInputs = detail.input || {};
-
-    // Best-effort - a slow/unreachable workflow-schema call should never
-    // break the inputs response itself, just fall back to unlabeled
-    // (renderReviewInputs() in app.js already humanizes the raw key when
-    // no label is present, same as before this existed).
-    let labels = {};
-    try {
-      labels = await fetchInputLabels();
-    } catch (labelErr) {
-      console.error('input label fetch error', labelErr);
-    }
-
-    const inputs = {};
-    for (const [varName, entry] of Object.entries(rawInputs)) {
-      const wrapped = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : { value: entry };
-      inputs[varName] = { ...wrapped, label: labels[varName] };
-    }
-
-    res.json({ inputs });
+    res.json({ inputs: await labelInputs(detail.input || {}) });
   } catch (err) {
     console.error('case inputs fetch error', err);
     res.status(500).json({ error: err.message || 'Failed to fetch case inputs.' });
   }
 });
 
-// variable_name -> display_name for the workflow's Input node, e.g.
-// workflow_input_6o3r11awf -> "ID Document". Powers the labels above.
+// Wraps each raw input value as {value, type, label} - merging in
+// fetchInputLabels()'s live-fetched label (undefined, i.e. omitted once
+// JSON-serialized, if none is found) alongside whatever shape Opus itself
+// sent the value in. Shared by GET /api/run/:id/inputs above (a job's
+// original Input-node values) and GET /api/run/:id/review below (a
+// pending HITL dispatch's own inputs, from a completely different node -
+// see fetchInputLabels()) - both need the exact same wrap-and-merge, just
+// against a different raw inputs object.
+async function labelInputs(rawInputs) {
+  // Best-effort - a slow/unreachable workflow-schema call should never
+  // break the inputs response itself, just fall back to unlabeled
+  // (renderReviewInputs() in app.js already humanizes the raw key when
+  // no label is present, same as before this existed).
+  let labels = {};
+  try {
+    labels = await fetchInputLabels();
+  } catch (labelErr) {
+    console.error('input label fetch error', labelErr);
+  }
+
+  const inputs = {};
+  for (const [varName, entry] of Object.entries(rawInputs)) {
+    const wrapped = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : { value: entry };
+    inputs[varName] = { ...wrapped, label: labels[varName] };
+  }
+  return inputs;
+}
+
+// variable_name -> display_name, scanned across every node in the
+// workflow (not just the Input node) - e.g. workflow_input_6o3r11awf ->
+// "ID Document" (the Input node), or workflow_input_9556ka0z9 ->
+// "Extracted Identity JSON" (the separate "KYC Human Task" node a HITL
+// dispatch's inputs actually come from). Powers the labels above.
 //
 // CONFIRMED LIVE 2026-09-02 against this exact workflow via /api/schema:
 // the API reference's documented response shape for GET
@@ -490,27 +502,32 @@ app.get('/api/run/:id/inputs', async (req, res) => {
 // workflow - already flagged in README's "Corrections to the API
 // reference" (section 4.1). The real path, and where display_name/
 // description actually live, is:
-//   nodes[workflow_input_node_id].input_schema.schema[variable_name]
-// No hardcoded id->label mapping needed - this workflow only ever has
-// these same 4 fixed input variables, and fetching live keeps labels
-// correct automatically if they're ever edited in the Opus builder.
+//   nodes[<any node id>].input_schema.schema[variable_name]
+// Originally scoped to just nodes[workflow_input_node_id] (there's no
+// equivalent top-level pointer to "the review node" to narrow this the
+// same way) - broadened after confirming live that a HITL dispatch's
+// inputs belong to a different node entirely ("KYC Human Task"), with
+// variable_name values that look globally unique across the graph, so
+// scanning every node's input_schema carries no realistic collision risk.
 async function fetchInputLabels() {
   // Labels are a nice-to-have on top of the inputs response, not
-  // load-bearing (the raw-key fallback in GET /api/run/:id/inputs above
-  // covers a missing/failed call just fine) - but neither fetch() nor
-  // opusFetch's own retry loop has any timeout of its own, only retries on
-  // an actual 429/5xx response. A connection that just hangs (no response
-  // at all) would otherwise block the whole inputs response indefinitely.
-  // Bounded here so a slow/unreachable workflow-schema call degrades to
-  // "no labels" within a few seconds instead of hanging the request.
+  // load-bearing (the raw-key fallback in labelInputs()'s callers covers a
+  // missing/failed call just fine) - but neither fetch() nor opusFetch's
+  // own retry loop has any timeout of its own, only retries on an actual
+  // 429/5xx response. A connection that just hangs (no response at all)
+  // would otherwise block the whole inputs response indefinitely. Bounded
+  // here so a slow/unreachable workflow-schema call degrades to "no
+  // labels" within a few seconds instead of hanging the request.
   const schemaRes = await opusFetch(`/workflow/${OPUS_WORKFLOW_ID}`, { signal: AbortSignal.timeout(5000) });
   const workflow = await schemaRes.json();
-  const inputNode = workflow.nodes?.[workflow.workflow_input_node_id];
-  const schema = (inputNode && inputNode.input_schema && inputNode.input_schema.schema) || {};
 
   const labels = {};
-  for (const [varName, def] of Object.entries(schema)) {
-    if (def && def.display_name) labels[varName] = def.display_name;
+  for (const node of Object.values(workflow.nodes || {})) {
+    const schema = node && node.input_schema && node.input_schema.schema;
+    if (!schema) continue;
+    for (const [varName, def] of Object.entries(schema)) {
+      if (def && def.display_name) labels[varName] = def.display_name;
+    }
   }
   return labels;
 }
@@ -620,13 +637,17 @@ app.post('/api/opus-webhook/human-review', async (req, res) => {
   res.status(200).json({ received: true });
 });
 
-app.get('/api/run/:id/review', (req, res) => {
+app.get('/api/run/:id/review', async (req, res) => {
   const jobId = req.params.id;
   const dispatch = pendingReviewDispatches.get(jobId);
   if (!dispatch) return res.json({ pending: false });
   res.json({
     pending: true,
-    inputs: dispatch.inputs || {},
+    // dispatch.inputs is keyed by the "KYC Human Task" node's own
+    // variable names, not the workflow's Input node - see
+    // fetchInputLabels()'s comment for how labelInputs() still finds
+    // their real display_name (workflow-wide scan, not Input-node-only).
+    inputs: await labelInputs(dispatch.inputs || {}),
     workflowName: dispatch.workflowName || null,
   });
 });
