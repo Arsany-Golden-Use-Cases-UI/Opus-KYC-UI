@@ -93,6 +93,7 @@ roleGateSubmitBtn.addEventListener('click', async () => {
 
     if (res.ok && data.ok) {
       currentRole = pendingRoleChoice;
+      applyRoleRestrictions();
       const onVerified = roleGateOnVerified;
       closeRoleGate();
       onVerified?.();
@@ -139,8 +140,36 @@ const VIEW_TITLES = {
 // static mock data) doesn't change within a single page load.
 const viewLoaded = {};
 
+// data-roles is a comma-separated list of roles allowed to see a given nav
+// item (e.g. "agent,manager" or "manager") - see applyRoleRestrictions()
+// further down. No data-roles attribute at all means "visible to
+// everyone" (defensive default, not currently used by any real item).
+// currentRole being unset (null, e.g. before the role gate has been
+// passed) fails closed - nothing is "allowed" until a real role is set.
+function isRoleAllowed(navItemEl) {
+  const rolesAttr = navItemEl.dataset.roles;
+  if (!rolesAttr) return true;
+  const allowed = rolesAttr.split(',').map((r) => r.trim()).filter(Boolean);
+  return Boolean(currentRole) && allowed.includes(currentRole);
+}
+
 function switchToView(viewName) {
   if (!VIEW_TITLES[viewName]) return;
+
+  // Safety net (see applyRoleRestrictions()): refuse to activate a panel
+  // the current role can't see, even if something other than a sidebar
+  // click calls this directly. Redirect to Case Queue instead, since
+  // every role that can pass the role gate can see it - but guard the
+  // redirect itself against the same check failing (e.g. currentRole not
+  // set yet at all), which would otherwise recurse forever.
+  const targetBtn = navItems.find((btn) => btn.dataset.view === viewName);
+  if (targetBtn && !isRoleAllowed(targetBtn)) {
+    const fallbackBtn = navItems.find((btn) => btn.dataset.view === 'queue');
+    if (viewName !== 'queue' && fallbackBtn && isRoleAllowed(fallbackBtn)) {
+      switchToView('queue');
+    }
+    return;
+  }
 
   navItems.forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === viewName);
@@ -153,6 +182,25 @@ function switchToView(viewName) {
   if (!viewLoaded[viewName]) {
     viewLoaded[viewName] = true;
     loadViewData(viewName);
+  }
+}
+
+// Central place role-dependent sidebar visibility is (re-)applied - called
+// right after currentRole changes (role verified, or reset in
+// backToRoleSelection()) so nothing is ever left stuck showing/hidden from
+// a previous role.
+function applyRoleRestrictions() {
+  navItems.forEach((btn) => {
+    btn.hidden = !isRoleAllowed(btn);
+  });
+
+  // If the view that was active belonged to a role we're no longer in
+  // (e.g. a Compliance Officer was on Sanctions Alerts, switched back to
+  // the role gate, and logged back in as a KYC Agent), fall back to Case
+  // Queue rather than leaving a now-restricted panel visible underneath.
+  const activeBtn = navItems.find((btn) => btn.classList.contains('active'));
+  if (activeBtn && !isRoleAllowed(activeBtn)) {
+    switchToView('queue');
   }
 }
 
@@ -1209,6 +1257,7 @@ resetBtn.addEventListener('click', () => {
 function backToRoleSelection() {
   stopPolling();
   currentRole = null;
+  applyRoleRestrictions();
   setBusy(false);
   intakeFormCard.hidden = true;
   backToRoleBtn.hidden = true;

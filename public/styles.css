@@ -417,6 +417,14 @@ img {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+/* Same author-vs-UA-stylesheet [hidden] issue as elsewhere in this file:
+   .nav-item sets its own `display`, so [hidden] needs an explicit override
+   or a role-restricted item (see applyRoleRestrictions() in app.js) would
+   stay visible regardless of the hidden attribute JS sets on it. */
+.nav-item[hidden] {
+  display: none;
+}
+
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
