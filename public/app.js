@@ -158,7 +158,6 @@ const VIEW_TITLES = {
   intake: 'New Intake',
   mycases: 'My Cases',
   pending: 'Pending Reviews',
-  sanctions: 'Sanctions Alerts',
   reports: 'Reports',
   settings: 'Settings',
   // No sidebar nav item of its own - see the [data-view-panel="review"]
@@ -242,7 +241,7 @@ function applyRoleRestrictions() {
   // .active) because the standalone "review" panel has no nav item of its
   // own - relying on nav-item state would miss it entirely and leave it
   // sitting there as the active view after a role switch. Covers two
-  // cases: a manager-only tab (e.g. Sanctions Alerts) left active by a
+  // cases: a manager-only tab (e.g. Reports) left active by a
   // Compliance Officer who then switches to KYC Agent, and the "review"
   // panel itself, which should never stay active across a role change
   // regardless of role.
@@ -258,8 +257,6 @@ function loadViewData(viewName) {
     renderCaseTable('queue-table-wrap', 'queue-stats');
   } else if (viewName === 'mycases') {
     renderCaseTable('mycases-table-wrap', null);
-  } else if (viewName === 'sanctions') {
-    renderSanctionsTable();
   } else if (viewName === 'reports') {
     renderReports();
   } else if (viewName === 'settings') {
@@ -1146,9 +1143,9 @@ function buildBadgeSpan(value, toneOverride) {
   return span;
 }
 
-// onRowClick is optional - only Case Queue / My Cases pass one (see
-// renderCaseTable() below); Sanctions Alerts' call site leaves it
-// undefined and stays inert, no row highlighting or click handling.
+// onRowClick is optional - passing none leaves rows inert, no row
+// highlighting or click handling (see renderCaseTable() below for the
+// only current caller, which always passes one).
 function buildDataTable(columns, rows, emptyMessage, onRowClick) {
   const wrap = document.createElement('div');
 
@@ -1501,38 +1498,6 @@ function startCaseDetailPolling(jobId) {
 
   tick();
   caseDetailPollTimer = setInterval(tick, POLL_INTERVAL_MS);
-}
-
-// ============================================================
-// Sanctions Alerts: invented sample data - preview only.
-// ============================================================
-const SANCTIONS_SAMPLE_ROWS = [
-  { name: 'Karim El-Sayed', list: 'OFAC SDN', matchScore: '92%', status: 'Open', flagged: '2 days ago' },
-  { name: 'Nadia Petrov', list: 'EU Consolidated', matchScore: '78%', status: 'Under Review', flagged: '4 days ago' },
-  { name: 'Global Horizon Trading LLC', list: 'UN Sanctions', matchScore: '65%', status: 'Cleared', flagged: '1 week ago' },
-  { name: 'Youssef Haddad', list: 'OFAC SDN', matchScore: '88%', status: 'Open', flagged: '1 week ago' },
-  { name: 'Alina Marchetti', list: 'UK HMT', matchScore: '71%', status: 'Cleared', flagged: '2 weeks ago' },
-];
-
-const SANCTIONS_COLUMNS = [
-  { label: 'Name / Entity', render: (row) => row.name },
-  { label: 'List', render: (row) => row.list },
-  { label: 'Match Score', render: (row) => row.matchScore },
-  {
-    label: 'Status',
-    render: (row) => {
-      const tone = row.status === 'Cleared' ? 'green' : row.status === 'Open' ? 'pink' : 'yellow';
-      return buildBadgeSpan(row.status, tone);
-    },
-  },
-  { label: 'Flagged', render: (row) => row.flagged },
-];
-
-function renderSanctionsTable() {
-  const wrap = document.getElementById('sanctions-table-wrap');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  wrap.appendChild(buildDataTable(SANCTIONS_COLUMNS, SANCTIONS_SAMPLE_ROWS, 'No alerts.'));
 }
 
 // ============================================================

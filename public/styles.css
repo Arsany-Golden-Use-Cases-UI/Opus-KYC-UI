@@ -1158,7 +1158,7 @@ details summary {
   color: var(--color-text-muted);
 }
 
-/* ---------- Data tables (Case Queue / My Cases / Sanctions Alerts) ---------- */
+/* ---------- Data tables (Case Queue / My Cases) ---------- */
 
 .table-card {
   padding: 0;
@@ -1203,8 +1203,7 @@ details summary {
 }
 
 /* Case Queue / My Cases rows - opens Case Detail (or the review form) on
-   click. Sanctions Alerts doesn't pass a click handler, so its rows never
-   get this class - see buildDataTable()'s onRowClick param. */
+   click - see buildDataTable()'s onRowClick param. */
 .data-table-row-clickable {
   cursor: pointer;
 }
@@ -1214,7 +1213,7 @@ details summary {
   background: var(--color-surface-muted);
 }
 
-/* Small "this isn't real yet" flag on the Sanctions Alerts / Reports tabs. */
+/* Small "this isn't real yet" flag on the Reports tab. */
 .sample-data-badge {
   display: inline-block;
   font-family: var(--font-mono);
