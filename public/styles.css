@@ -342,6 +342,15 @@ img {
   gap: 0.9rem;
 }
 
+/* Same author-vs-UA-stylesheet [hidden] issue as elsewhere in this file
+   (.status-banner, .header-back-btn, etc.): .role-gate-password-step sets
+   its own `display`, so [hidden] needs an explicit override or the
+   password field/label/Continue button all show up immediately on load
+   instead of waiting for a role to be picked. */
+.role-gate-password-step[hidden] {
+  display: none;
+}
+
 .role-gate-password-step .btn {
   margin-top: 0;
 }
