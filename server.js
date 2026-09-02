@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const { Redis } = require('@upstash/redis');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -66,36 +66,44 @@ const REVIEW_OUTPUT_VARS = {
 const FAILURE_STATUSES = ['FAILED', 'CANCELLED', 'TIMED_OUT'];
 
 // ---------------------------------------------------------------------
-// Case history (ADDED 2026-08-31)
+// Case history (ADDED 2026-08-31, moved to Upstash Redis 2026-09-02)
 //
-// A simple local log of every case run through this app, backing the new
-// Case Queue / My Cases tabs with real data instead of invented mockup
-// numbers. Deliberately just a JSON file, not a database - this is a
-// single small dev instance.
-//
-// KNOWN LIMITATION: this will NOT persist on Vercel. Serverless functions
-// there don't share a writable, durable filesystem across invocations -
-// this file works for local (`npm start`) use only. A real deployment
-// with persistent history needs an actual database (e.g. a hosted
-// Postgres/Redis) swapped in behind loadHistory()/saveHistory() below.
+// A simple log of every case run through this app, backing the Case
+// Queue / My Cases tabs with real data instead of invented mockup
+// numbers. Originally a local JSON file, which didn't work on Vercel -
+// serverless functions there don't share a writable, durable filesystem
+// across invocations, so writes from one request were invisible to the
+// next. Now backed by Upstash Redis (via Vercel's KV integration) so
+// every invocation reads/writes the same store regardless of which
+// instance handles the request.
 // ---------------------------------------------------------------------
 
-const HISTORY_FILE = path.join(__dirname, 'data', 'case-history.json');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
-function loadHistory() {
+const HISTORY_KEY = 'case-history';
+
+async function loadHistory() {
   try {
-    const raw = fs.readFileSync(HISTORY_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
+    const raw = await redis.get(HISTORY_KEY);
+    if (!raw) return [];
+    // @upstash/redis auto-deserializes JSON-looking string values on get(),
+    // so `raw` normally already comes back as a parsed array - but guard
+    // for a plain string too (e.g. an older/different client behavior)
+    // rather than assuming one shape and crashing on the other.
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
+    console.error('case history read error', err);
     return [];
   }
 }
 
-function saveHistory(entries) {
+async function saveHistory(entries) {
   try {
-    fs.mkdirSync(path.dirname(HISTORY_FILE), { recursive: true });
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(entries, null, 2));
+    await redis.set(HISTORY_KEY, JSON.stringify(entries));
   } catch (err) {
     console.error('case history write error', err);
   }
@@ -119,22 +127,22 @@ function extractApplicantName(applicationFormJson) {
   }
 }
 
-function addHistoryEntry(entry) {
-  const entries = loadHistory();
+async function addHistoryEntry(entry) {
+  const entries = await loadHistory();
   entries.push(entry);
-  saveHistory(entries);
+  await saveHistory(entries);
 }
 
-function updateHistoryEntry(jobId, updates) {
-  const entries = loadHistory();
+async function updateHistoryEntry(jobId, updates) {
+  const entries = await loadHistory();
   const idx = entries.findIndex((e) => e.jobId === jobId);
   if (idx === -1) return;
   entries[idx] = { ...entries[idx], ...updates };
-  saveHistory(entries);
+  await saveHistory(entries);
 }
 
-app.get('/api/case-history', (req, res) => {
-  const entries = loadHistory().sort(
+app.get('/api/case-history', async (req, res) => {
+  const entries = (await loadHistory()).sort(
     (a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)
   );
   res.json({ entries });
@@ -319,7 +327,7 @@ app.post('/api/run', async (req, res) => {
     // Case Queue immediately, not just once it finishes - best-effort,
     // never lets a logging problem fail the actual job start.
     try {
-      addHistoryEntry({
+      await addHistoryEntry({
         jobId: jobExecutionId,
         title: title || 'Banking KYC run',
         applicantName: extractApplicantName(applicationFormJson),
@@ -359,7 +367,7 @@ app.get('/api/run/:id', async (req, res) => {
       }
 
       try {
-        updateHistoryEntry(jobId, {
+        await updateHistoryEntry(jobId, {
           status,
           finalDecision: outputs.finalDecision ?? null,
           routingFlag: outputs.routingFlag ?? null,
@@ -377,7 +385,7 @@ app.get('/api/run/:id', async (req, res) => {
       const audit = await auditRes.json();
 
       try {
-        updateHistoryEntry(jobId, { status, completedAt: new Date().toISOString() });
+        await updateHistoryEntry(jobId, { status, completedAt: new Date().toISOString() });
       } catch (historyErr) {
         console.error('case history update error', historyErr);
       }
