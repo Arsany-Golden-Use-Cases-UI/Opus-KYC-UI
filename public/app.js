@@ -156,7 +156,6 @@ const headerViewTitle = document.getElementById('header-view-title');
 const VIEW_TITLES = {
   queue: 'Case Queue',
   intake: 'New Intake',
-  mycases: 'My Cases',
   pending: 'Pending Reviews',
   reports: 'Reports',
   settings: 'Settings',
@@ -255,8 +254,6 @@ function applyRoleRestrictions() {
 function loadViewData(viewName) {
   if (viewName === 'queue') {
     renderCaseTable('queue-table-wrap', 'queue-stats');
-  } else if (viewName === 'mycases') {
-    renderCaseTable('mycases-table-wrap', null);
   } else if (viewName === 'reports') {
     renderReports();
   } else if (viewName === 'settings') {
@@ -309,7 +306,7 @@ const resetBtn = document.getElementById('reset-btn');
 const backToRoleBtn = document.getElementById('back-to-role-btn');
 
 // Case Detail (standalone view-panel, no nav item - reached only via a
-// Case Queue/My Cases row click, see loadAndShowCaseDetail() near
+// Case Queue row click, see loadAndShowCaseDetail() near
 // renderCaseTable()). Deliberately its own full set of status/progress/
 // results/error elements, separate from New Intake's above, so browsing
 // another case's live status here can never collide with a job New Intake
@@ -1112,7 +1109,7 @@ function escapeHtml(str) {
 
 
 // ============================================================
-// Case Queue / My Cases: real history from /api/case-history.
+// Case Queue: real history from /api/case-history.
 // ============================================================
 function formatDuration(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -1345,7 +1342,7 @@ async function openPendingReview(jobId) {
 }
 
 // ============================================================
-// Case Detail: opened by clicking a Case Queue / My Cases row. Both roles
+// Case Detail: opened by clicking a Case Queue row. Both roles
 // can view (see the investigation this was built from - no server-side or
 // client-side restriction on case data, only on submitting a review
 // decision), so behavior only branches on the case's own status, plus
@@ -1391,7 +1388,7 @@ function resetCaseDetailPanel() {
   caseDetailResultsPanel.hidden = true;
 }
 
-// Row click handler for Case Queue / My Cases (see renderCaseTable()
+// Row click handler for Case Queue (see renderCaseTable()
 // above). A WAITING_REVIEW row for a verified Compliance Officer skips
 // the case-detail panel entirely and opens the same interactive form a
 // Pending Reviews card would - loadAndShowReview() already trusts its
@@ -1502,8 +1499,8 @@ function startCaseDetailPolling(jobId) {
 
 // ============================================================
 // Reports: real management-information stats, computed client-side from
-// the same GET /api/case-history entries Case Queue/My Cases already
-// fetch (see fetchCaseHistory()/renderQueueStats() above) - no dedicated
+// the same GET /api/case-history entries Case Queue already fetches (see
+// fetchCaseHistory()/renderQueueStats() above) - no dedicated
 // endpoint, consistent with that existing pattern; case history is a
 // single small Redis blob, already loaded in full everywhere else. Scoped
 // to the current calendar month throughout, so every tile/row describes

@@ -69,8 +69,8 @@ const FAILURE_STATUSES = ['FAILED', 'CANCELLED', 'TIMED_OUT'];
 // Case history (ADDED 2026-08-31, moved to Upstash Redis 2026-09-02)
 //
 // A simple log of every case run through this app, backing the Case
-// Queue / My Cases tabs with real data instead of invented mockup
-// numbers. Originally a local JSON file, which didn't work on Vercel -
+// Queue tab with real data instead of invented mockup numbers.
+// Originally a local JSON file, which didn't work on Vercel -
 // serverless functions there don't share a writable, durable filesystem
 // across invocations, so writes from one request were invisible to the
 // next. Now backed by Upstash Redis (via Vercel's KV integration) so

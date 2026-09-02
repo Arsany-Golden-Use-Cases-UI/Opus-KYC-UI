@@ -464,6 +464,20 @@ img {
   padding: 2rem 2rem 2.5rem;
 }
 
+/* Case Queue's table (9 columns: Case, Applicant, Submitted, Ran by,
+   Status, Decision, Routing, Reviewed by, Duration - each nowrap) is
+   comfortably wider than .content's normal 1180px cap, forcing
+   .table-card's horizontal scrollbar on typical desktop widths and
+   cutting off the last couple of columns. Scoped to just this one panel
+   via :has() rather than raising .content's cap globally, which would
+   also widen Case Detail, Pending Reviews, Reports, and Settings - none
+   of which need or asked for it (same reasoning as .review-wide/
+   .intake-narrow scoping the review panel and New Intake's form widths
+   independently of each other). */
+.content:has(> [data-view-panel="queue"]:not([hidden])) {
+  max-width: 1600px;
+}
+
 /* Each sidebar tab's content area. Deliberately no [hidden] override here
    like .app-view/.status-banner above got - this rule sets no `display`
    of its own (block is the plain <section> default), so the UA
@@ -1158,7 +1172,7 @@ details summary {
   color: var(--color-text-muted);
 }
 
-/* ---------- Data tables (Case Queue / My Cases) ---------- */
+/* ---------- Data tables (Case Queue) ---------- */
 
 .table-card {
   padding: 0;
@@ -1202,8 +1216,8 @@ details summary {
   font-size: 0.9rem;
 }
 
-/* Case Queue / My Cases rows - opens Case Detail (or the review form) on
-   click - see buildDataTable()'s onRowClick param. */
+/* Case Queue rows - opens Case Detail (or the review form) on click -
+   see buildDataTable()'s onRowClick param. */
 .data-table-row-clickable {
   cursor: pointer;
 }

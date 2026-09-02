@@ -62,7 +62,6 @@
       <nav class="sidebar-nav">
         <button type="button" class="nav-item" data-view="queue" data-roles="agent,manager">Case Queue</button>
         <button type="button" class="nav-item active" data-view="intake" data-roles="agent,manager">New Intake</button>
-        <button type="button" class="nav-item" data-view="mycases" data-roles="manager">My Cases</button>
         <button type="button" class="nav-item" data-view="pending" data-roles="manager">Pending Reviews</button>
         <button type="button" class="nav-item" data-view="reports" data-roles="manager">Reports</button>
         <button type="button" class="nav-item" data-view="settings" data-roles="agent,manager">Settings</button>
@@ -260,7 +259,7 @@
         </section>
 
         <!-- ============== Case Detail (standalone panel - no sidebar nav item
-             of its own). Reached by clicking a row in Case Queue or My Cases
+             of its own). Reached by clicking a row in Case Queue
              (see openCaseDetail() in app.js). Fully separate status/progress/
              results/error elements and its own poll loop from New Intake's -
              browsing another case's live status here never collides with a
@@ -347,17 +346,6 @@
                 </div>
               </section>
             </div>
-          </div>
-        </section>
-
-        <!-- ============== My Cases (real data, same history) ============== -->
-        <section class="view-panel" data-view-panel="mycases" hidden>
-          <p class="card-eyebrow">Banking KYC / My Cases</p>
-          <h1 class="page-title">My cases</h1>
-          <p class="subtitle">This console doesn't have separate analyst accounts yet — this is every case run here.</p>
-
-          <div class="card table-card">
-            <div id="mycases-table-wrap"></div>
           </div>
         </section>
 
