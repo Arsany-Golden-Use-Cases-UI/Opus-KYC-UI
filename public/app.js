@@ -137,6 +137,9 @@ const VIEW_TITLES = {
   // No sidebar nav item of its own - see the [data-view-panel="review"]
   // comment in index.html for how this view is actually reached.
   review: 'Human Review',
+  // Same as above - see the [data-view-panel="casedetail"] comment in
+  // index.html.
+  casedetail: 'Case Detail',
 };
 
 // Each tab's data is fetched/rendered once, the first time it's opened,
@@ -173,6 +176,16 @@ function switchToView(viewName) {
       switchToView('queue');
     }
     return;
+  }
+
+  // The case-detail panel runs its own independent poll loop while it's
+  // the visible view (see startCaseDetailPolling() near renderCaseTable())
+  // - stop it the moment we're actually navigating away, so it doesn't
+  // keep hitting /api/run/:id in the background for a case nobody's
+  // looking at anymore.
+  const previousPanel = viewPanels.find((panel) => !panel.hidden);
+  if (previousPanel && previousPanel.dataset.viewPanel === 'casedetail' && viewName !== 'casedetail') {
+    stopCaseDetailPolling();
   }
 
   navItems.forEach((btn) => {
@@ -271,6 +284,47 @@ const resetBtn = document.getElementById('reset-btn');
 // alongside it in revealIntakeForm()/backToRoleSelection() below.
 const backToRoleBtn = document.getElementById('back-to-role-btn');
 
+// Case Detail (standalone view-panel, no nav item - reached only via a
+// Case Queue/My Cases row click, see loadAndShowCaseDetail() near
+// renderCaseTable()). Deliberately its own full set of status/progress/
+// results/error elements, separate from New Intake's above, so browsing
+// another case's live status here can never collide with a job New Intake
+// (or another case-detail visit) is actively tracking.
+const caseDetailTitle = document.getElementById('case-detail-title');
+const caseDetailSubtitle = document.getElementById('case-detail-subtitle');
+const caseDetailInputs = document.getElementById('case-detail-inputs');
+const caseDetailStatusPanel = document.getElementById('case-detail-status-panel');
+const caseDetailStatusText = document.getElementById('case-detail-status-text');
+const caseDetailStatusElapsedEl = document.getElementById('case-detail-status-elapsed');
+const caseDetailStatusProgress = document.getElementById('case-detail-status-progress');
+const caseDetailStatusStepsCount = document.getElementById('case-detail-status-steps-count');
+const caseDetailProgressBarFill = document.getElementById('case-detail-progress-bar-fill');
+const caseDetailProgressBarRunning = document.getElementById('case-detail-progress-bar-running');
+const caseDetailStatusStepPills = document.getElementById('case-detail-status-step-pills');
+const caseDetailReviewNotice = document.getElementById('case-detail-review-notice');
+const caseDetailErrorPanel = document.getElementById('case-detail-error-panel');
+const caseDetailErrorStatus = document.getElementById('case-detail-error-status');
+const caseDetailErrorNodes = document.getElementById('case-detail-error-nodes');
+const caseDetailResultsPanel = document.getElementById('case-detail-results-panel');
+
+// Bundles passed into the now-parameterized renderProgress()/resetProgress()
+// (see below) so they write into these elements instead of New Intake's.
+const CASE_DETAIL_PROGRESS_ELEMENTS = {
+  progress: caseDetailStatusProgress,
+  text: caseDetailStatusText,
+  stepsCount: caseDetailStatusStepsCount,
+  barFill: caseDetailProgressBarFill,
+  barRunning: caseDetailProgressBarRunning,
+  pills: caseDetailStatusStepPills,
+};
+const CASE_DETAIL_RESET_ELEMENTS = {
+  progress: caseDetailStatusProgress,
+  pills: caseDetailStatusStepPills,
+  barFill: caseDetailProgressBarFill,
+  barRunning: caseDetailProgressBarRunning,
+  elapsed: caseDetailStatusElapsedEl,
+};
+
 const POLL_INTERVAL_MS = 4000;
 
 // Extensible color-coding for Final Decision / Routing Flag values, using
@@ -345,7 +399,18 @@ function stopElapsedTimer() {
 // response). Falls back to hiding the progress block (leaving just the
 // status text/spinner) whenever nbNodes is missing or zero, e.g. before the
 // first audit call has resolved, or if it failed server-side.
-function renderProgress(data) {
+// `elements` defaults to New Intake's own status/progress elements so the
+// existing call site below (mid-poll, IN_PROGRESS) needs no change - the
+// case-detail panel's own poll loop passes CASE_DETAIL_PROGRESS_ELEMENTS
+// instead so it never writes into New Intake's DOM.
+function renderProgress(data, elements = {
+  progress: statusProgress,
+  text: statusText,
+  stepsCount: statusStepsCount,
+  barFill: progressBarFill,
+  barRunning: progressBarRunning,
+  pills: statusStepPills,
+}) {
   const nbNodes = data.nbNodes;
   const executedNodes = data.executedNodes || [];
   const runningNode = data.runningNode || null;
@@ -355,16 +420,16 @@ function renderProgress(data) {
   const remainingNodes = (data.remainingNodes || []).filter((name) => name !== runningNode);
 
   if (!nbNodes) {
-    statusProgress.hidden = true;
-    statusText.textContent = 'Processing…';
+    elements.progress.hidden = true;
+    elements.text.textContent = 'Processing…';
     return;
   }
 
   const completed = typeof data.nbExecutedNodes === 'number' ? data.nbExecutedNodes : executedNodes.length;
 
-  statusProgress.hidden = false;
-  statusText.textContent = runningNode ? `Running: ${runningNode}` : 'Processing…';
-  statusStepsCount.textContent = runningNode
+  elements.progress.hidden = false;
+  elements.text.textContent = runningNode ? `Running: ${runningNode}` : 'Processing…';
+  elements.stepsCount.textContent = runningNode
     ? `${completed} / ${nbNodes} steps — running: ${runningNode}`
     : `${completed} / ${nbNodes} steps`;
 
@@ -372,41 +437,47 @@ function renderProgress(data) {
   // separate lighter/pulsing segment rather than counting as done.
   const completedPct = Math.max(0, Math.min(100, (completed / nbNodes) * 100));
   const runningPct = runningNode ? Math.max(0, Math.min(100 - completedPct, (1 / nbNodes) * 100)) : 0;
-  progressBarFill.style.width = `${completedPct}%`;
-  progressBarRunning.style.width = `${runningPct}%`;
-  progressBarRunning.hidden = !runningNode;
+  elements.barFill.style.width = `${completedPct}%`;
+  elements.barRunning.style.width = `${runningPct}%`;
+  elements.barRunning.hidden = !runningNode;
 
-  statusStepPills.innerHTML = '';
+  elements.pills.innerHTML = '';
 
   executedNodes.forEach((name) => {
     const pill = document.createElement('span');
     pill.className = 'step-pill step-pill--done';
     pill.textContent = `✓ ${name}`;
-    statusStepPills.appendChild(pill);
+    elements.pills.appendChild(pill);
   });
 
   if (runningNode) {
     const pill = document.createElement('span');
     pill.className = 'step-pill step-pill--running';
     pill.textContent = runningNode;
-    statusStepPills.appendChild(pill);
+    elements.pills.appendChild(pill);
   }
 
   remainingNodes.forEach((name) => {
     const pill = document.createElement('span');
     pill.className = 'step-pill step-pill--pending';
     pill.textContent = name;
-    statusStepPills.appendChild(pill);
+    elements.pills.appendChild(pill);
   });
 }
 
-function resetProgress() {
-  statusProgress.hidden = true;
-  statusStepPills.innerHTML = '';
-  progressBarFill.style.width = '0%';
-  progressBarRunning.style.width = '0%';
-  progressBarRunning.hidden = true;
-  statusElapsed.textContent = '';
+function resetProgress(elements = {
+  progress: statusProgress,
+  pills: statusStepPills,
+  barFill: progressBarFill,
+  barRunning: progressBarRunning,
+  elapsed: statusElapsed,
+}) {
+  elements.progress.hidden = true;
+  elements.pills.innerHTML = '';
+  elements.barFill.style.width = '0%';
+  elements.barRunning.style.width = '0%';
+  elements.barRunning.hidden = true;
+  elements.elapsed.textContent = '';
 }
 
 function showError(message) {
@@ -567,8 +638,12 @@ function unwrapReviewValue(v) {
   return v;
 }
 
-function renderReviewInputs(inputs) {
-  const container = document.getElementById('review-inputs');
+// containerId defaults to the HITL review card's own inputs block; the
+// case-detail panel (loadAndShowCaseDetail(), near renderCaseTable())
+// passes 'case-detail-inputs' instead to render a job's original inputs
+// there, reusing this same generic key/value rendering.
+function renderReviewInputs(inputs, containerId = 'review-inputs') {
+  const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
 
@@ -820,25 +895,36 @@ function stopPolling() {
   stopElapsedTimer();
 }
 
-function showFailure(data) {
-  errorPanel.hidden = false;
-  errorStatus.textContent = `Status: ${data.status}`;
-  errorStatus.classList.remove(...TONE_CLASSES);
-  errorStatus.classList.add(`tone-${JOB_STATUS_TONE[data.status] || 'neutral'}`);
+// `elements` defaults to New Intake's own error elements; the case-detail
+// panel's poll loop passes its own instead (see startCaseDetailPolling()
+// near renderCaseTable()).
+function showFailure(data, elements = { panel: errorPanel, status: errorStatus, nodes: errorNodes }) {
+  elements.panel.hidden = false;
+  elements.status.textContent = `Status: ${data.status}`;
+  elements.status.classList.remove(...TONE_CLASSES);
+  elements.status.classList.add(`tone-${JOB_STATUS_TONE[data.status] || 'neutral'}`);
   const nodes = data.failedNodes || [];
-  errorNodes.innerHTML = nodes.length
+  elements.nodes.innerHTML = nodes.length
     ? `<p>Failed node(s):</p><ul>${nodes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
     : '<p>No specific failed node was reported. See server logs / the audit endpoint for detail.</p>';
 }
 
-function showResults(outputs) {
-  resultsPanel.hidden = false;
+// `elements` defaults to New Intake's own results elements; the
+// case-detail panel's poll loop passes its own instead.
+function showResults(outputs, elements = {
+  panel: resultsPanel,
+  finalDecision: document.getElementById('final-decision'),
+  routingFlag: document.getElementById('routing-flag'),
+  auditSummary: document.getElementById('audit-summary'),
+  caseFile: document.getElementById('case-file'),
+}) {
+  elements.panel.hidden = false;
 
-  setBadgeTone(document.getElementById('final-decision'), outputs.finalDecision);
-  setBadgeTone(document.getElementById('routing-flag'), outputs.routingFlag);
-  document.getElementById('audit-summary').textContent = outputs.auditSummary ?? '—';
+  setBadgeTone(elements.finalDecision, outputs.finalDecision);
+  setBadgeTone(elements.routingFlag, outputs.routingFlag);
+  elements.auditSummary.textContent = outputs.auditSummary ?? '—';
 
-  const caseFileEl = document.getElementById('case-file');
+  const caseFileEl = elements.caseFile;
   caseFileEl.innerHTML = '';
   const caseFile = outputs.caseFile;
 
@@ -1003,7 +1089,10 @@ function buildBadgeSpan(value, toneOverride) {
   return span;
 }
 
-function buildDataTable(columns, rows, emptyMessage) {
+// onRowClick is optional - only Case Queue / My Cases pass one (see
+// renderCaseTable() below); Sanctions Alerts' call site leaves it
+// undefined and stays inert, no row highlighting or click handling.
+function buildDataTable(columns, rows, emptyMessage, onRowClick) {
   const wrap = document.createElement('div');
 
   if (!rows.length) {
@@ -1030,6 +1119,18 @@ function buildDataTable(columns, rows, emptyMessage) {
   const tbody = document.createElement('tbody');
   rows.forEach((row) => {
     const tr = document.createElement('tr');
+    if (onRowClick) {
+      tr.classList.add('data-table-row-clickable');
+      tr.tabIndex = 0;
+      tr.setAttribute('role', 'button');
+      tr.addEventListener('click', () => onRowClick(row));
+      tr.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onRowClick(row);
+        }
+      });
+    }
     columns.forEach((col) => {
       const td = document.createElement('td');
       const rendered = col.render(row);
@@ -1117,7 +1218,7 @@ async function renderCaseTable(tableWrapId, statsContainerId) {
     const entries = await fetchCaseHistory();
     wrap.innerHTML = '';
     wrap.appendChild(
-      buildDataTable(CASE_TABLE_COLUMNS, entries, 'No cases have been run through this console yet.')
+      buildDataTable(CASE_TABLE_COLUMNS, entries, 'No cases have been run through this console yet.', openCaseDetail)
     );
     if (statsContainerId) renderQueueStats(statsContainerId, entries);
   } catch (err) {
@@ -1183,6 +1284,155 @@ async function openPendingReview(jobId) {
     console.error('open pending review error', err);
     renderPendingReviews();
   }
+}
+
+// ============================================================
+// Case Detail: opened by clicking a Case Queue / My Cases row. Both roles
+// can view (see the investigation this was built from - no server-side or
+// client-side restriction on case data, only on submitting a review
+// decision), so behavior only branches on the case's own status, plus
+// role for the WAITING_REVIEW case specifically.
+// ============================================================
+
+let caseDetailJobId = null;
+let caseDetailPollTimer = null;
+let caseDetailElapsedTimer = null;
+let caseDetailPollStartTime = null;
+
+function startCaseDetailElapsedTimer() {
+  caseDetailPollStartTime = Date.now();
+  caseDetailStatusElapsedEl.textContent = formatElapsed(0);
+  if (caseDetailElapsedTimer) clearInterval(caseDetailElapsedTimer);
+  caseDetailElapsedTimer = setInterval(() => {
+    caseDetailStatusElapsedEl.textContent = formatElapsed(Date.now() - caseDetailPollStartTime);
+  }, 1000);
+}
+
+function stopCaseDetailElapsedTimer() {
+  if (caseDetailElapsedTimer) {
+    clearInterval(caseDetailElapsedTimer);
+    caseDetailElapsedTimer = null;
+  }
+}
+
+function stopCaseDetailPolling() {
+  if (caseDetailPollTimer) {
+    clearInterval(caseDetailPollTimer);
+    caseDetailPollTimer = null;
+  }
+  stopCaseDetailElapsedTimer();
+}
+
+function resetCaseDetailPanel() {
+  stopCaseDetailPolling();
+  caseDetailInputs.innerHTML = '';
+  caseDetailStatusPanel.hidden = true;
+  resetProgress(CASE_DETAIL_RESET_ELEMENTS);
+  caseDetailReviewNotice.hidden = true;
+  caseDetailErrorPanel.hidden = true;
+  caseDetailResultsPanel.hidden = true;
+}
+
+// Row click handler for Case Queue / My Cases (see renderCaseTable()
+// above). A WAITING_REVIEW row for a verified Compliance Officer skips
+// the case-detail panel entirely and opens the same interactive form a
+// Pending Reviews card would - loadAndShowReview() already trusts its
+// callers to have checked currentRole === 'manager' first, exactly as
+// this does. Every other case (including WAITING_REVIEW for anyone else)
+// goes through loadAndShowCaseDetail().
+function openCaseDetail(entry) {
+  if (entry.status === 'WAITING_REVIEW' && currentRole === 'manager') {
+    // Same reset-before-load convention openPendingReview() uses - clears
+    // any stale Approve/Reject choice, comments, or error banner left over
+    // from a different review that was opened but never submitted.
+    resetReview();
+    loadAndShowReview(entry.jobId);
+    return;
+  }
+  loadAndShowCaseDetail(entry.jobId, entry);
+}
+
+// Fetches and renders one case's full detail into the standalone
+// "casedetail" view: original inputs (always - never persisted on our
+// side, see server.js's GET /api/run/:id/inputs) plus a status-dependent
+// outcome below them. `entry` is the case-history row that was clicked -
+// its .status is our own Redis-backed record (the only place the
+// synthetic WAITING_REVIEW value exists; Opus itself never reports it),
+// which is what decides the initial branch. Runs fully independent of New
+// Intake's own poll loop and of whatever this same panel showed for a
+// previously-opened case - see caseDetailJobId, checked before every
+// render below so a late response for an old jobId can never clobber it.
+async function loadAndShowCaseDetail(jobId, entry) {
+  caseDetailJobId = jobId;
+  resetCaseDetailPanel();
+  switchToView('casedetail');
+
+  caseDetailTitle.textContent = entry.applicantName || entry.title || `Case ${jobId}`;
+  caseDetailSubtitle.textContent = `Case ${jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
+
+  try {
+    const inputsRes = await fetch(`/api/run/${jobId}/inputs`);
+    const inputsData = await inputsRes.json();
+    if (caseDetailJobId === jobId) renderReviewInputs(inputsData.inputs || {}, 'case-detail-inputs');
+  } catch (err) {
+    console.error('case detail inputs fetch error', err);
+  }
+
+  if (entry.status === 'WAITING_REVIEW') {
+    // Reached only for a non-manager - a Compliance Officer viewing a
+    // WAITING_REVIEW row never gets here (see openCaseDetail() above). No
+    // output yet since the case is mid-decision, just the notice.
+    if (caseDetailJobId === jobId) caseDetailReviewNotice.hidden = false;
+    return;
+  }
+
+  startCaseDetailPolling(jobId);
+}
+
+// Polls this one job's status independently of any other poll loop in the
+// app (New Intake's, or a different case-detail visit) - its own timer,
+// its own elements. A COMPLETED or FAILED/CANCELLED/TIMED_OUT result stops
+// itself after the first tick, same as an already-finished case would;
+// anything else keeps polling exactly like New Intake's own pollStatus().
+function startCaseDetailPolling(jobId) {
+  startCaseDetailElapsedTimer();
+
+  const tick = async () => {
+    // A response can land after the user has already opened a different
+    // case (or left this view) - drop it rather than clobbering whatever
+    // this panel is showing now.
+    if (caseDetailJobId !== jobId) return;
+    try {
+      const res = await fetch(`/api/run/${jobId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to check job status.');
+      if (caseDetailJobId !== jobId) return;
+
+      if (data.status === 'COMPLETED') {
+        stopCaseDetailPolling();
+        caseDetailStatusPanel.hidden = true;
+        showResults(data.outputs, {
+          panel: caseDetailResultsPanel,
+          finalDecision: document.getElementById('case-detail-final-decision'),
+          routingFlag: document.getElementById('case-detail-routing-flag'),
+          auditSummary: document.getElementById('case-detail-audit-summary'),
+          caseFile: document.getElementById('case-detail-case-file'),
+        });
+      } else if (['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(data.status)) {
+        stopCaseDetailPolling();
+        caseDetailStatusPanel.hidden = true;
+        showFailure(data, { panel: caseDetailErrorPanel, status: caseDetailErrorStatus, nodes: caseDetailErrorNodes });
+      } else {
+        caseDetailStatusPanel.hidden = false;
+        renderProgress(data, CASE_DETAIL_PROGRESS_ELEMENTS);
+      }
+    } catch (err) {
+      console.error('case detail poll error', err);
+    }
+  };
+
+  tick();
+  caseDetailPollTimer = setInterval(tick, POLL_INTERVAL_MS);
 }
 
 // ============================================================

@@ -1168,6 +1168,18 @@ details summary {
   font-size: 0.9rem;
 }
 
+/* Case Queue / My Cases rows - opens Case Detail (or the review form) on
+   click. Sanctions Alerts doesn't pass a click handler, so its rows never
+   get this class - see buildDataTable()'s onRowClick param. */
+.data-table-row-clickable {
+  cursor: pointer;
+}
+
+.data-table-row-clickable:hover,
+.data-table-row-clickable:focus-visible {
+  background: var(--color-surface-muted);
+}
+
 /* Small "this isn't real yet" flag on the Sanctions Alerts / Reports tabs. */
 .sample-data-badge {
   display: inline-block;

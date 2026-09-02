@@ -426,6 +426,32 @@ app.get('/api/run/:id', async (req, res) => {
   }
 });
 
+// A job's original inputs are never persisted on our side (case history
+// only ever stores the summary fields shown in the queue tables) - this
+// always goes straight to Opus's job-detail endpoint instead, which
+// embeds the raw `input` object regardless of the job's current status
+// (API reference section 4.7). Works for a case run long ago just as well
+// as one still in progress, since Opus is the only place this ever lived.
+//
+// UNVERIFIED AGAINST A LIVE CALL as of 2026-09-02 (same caveat as the HITL
+// webhook code above - this sandbox has no network path to
+// operator.opus.com): the reference describes `input` as a "raw object"
+// without pinning down whether each value comes back bare or still
+// wrapped as {value, type} the way jobPayloadSchemaInstance sent it.
+// Unwrapped defensively client-side (see unwrapReviewValue in app.js,
+// already written to handle either shape) rather than guessed at here.
+app.get('/api/run/:id/inputs', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const detailRes = await opusFetch(`/job/${jobId}`);
+    const detail = await detailRes.json();
+    res.json({ inputs: detail.input || {} });
+  } catch (err) {
+    console.error('case inputs fetch error', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch case inputs.' });
+  }
+});
+
 // ---------------------------------------------------------------------
 // Off-platform Human Review (API reference section 9.2)
 //
