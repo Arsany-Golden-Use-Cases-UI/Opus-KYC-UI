@@ -130,9 +130,13 @@ const VIEW_TITLES = {
   queue: 'Case Queue',
   intake: 'New Intake',
   mycases: 'My Cases',
+  pending: 'Pending Reviews',
   sanctions: 'Sanctions Alerts',
   reports: 'Reports',
   settings: 'Settings',
+  // No sidebar nav item of its own - see the [data-view-panel="review"]
+  // comment in index.html for how this view is actually reached.
+  review: 'Human Review',
 };
 
 // Each tab's data is fetched/rendered once, the first time it's opened,
@@ -194,12 +198,17 @@ function applyRoleRestrictions() {
     btn.hidden = !isRoleAllowed(btn);
   });
 
-  // If the view that was active belonged to a role we're no longer in
-  // (e.g. a Compliance Officer was on Sanctions Alerts, switched back to
-  // the role gate, and logged back in as a KYC Agent), fall back to Case
-  // Queue rather than leaving a now-restricted panel visible underneath.
-  const activeBtn = navItems.find((btn) => btn.classList.contains('active'));
-  if (activeBtn && !isRoleAllowed(activeBtn)) {
+  // Checked against the actual visible panel (not which nav-item carries
+  // .active) because the standalone "review" panel has no nav item of its
+  // own - relying on nav-item state would miss it entirely and leave it
+  // sitting there as the active view after a role switch. Covers two
+  // cases: a manager-only tab (e.g. Sanctions Alerts) left active by a
+  // Compliance Officer who then switches to KYC Agent, and the "review"
+  // panel itself, which should never stay active across a role change
+  // regardless of role.
+  const activePanel = viewPanels.find((panel) => !panel.hidden);
+  const activeBtn = activePanel && navItems.find((btn) => btn.dataset.view === activePanel.dataset.viewPanel);
+  if (!activeBtn || !isRoleAllowed(activeBtn)) {
     switchToView('queue');
   }
 }
@@ -215,6 +224,8 @@ function loadViewData(viewName) {
     renderReports();
   } else if (viewName === 'settings') {
     renderSettings();
+  } else if (viewName === 'pending') {
+    renderPendingReviews();
   }
 }
 
@@ -283,6 +294,7 @@ const JOB_STATUS_TONE = {
   FAILED: 'pink',
   TIMED_OUT: 'pink',
   CANCELLED: 'neutral',
+  WAITING_REVIEW: 'yellow',
 };
 
 function toneFor(value) {
@@ -609,26 +621,50 @@ function renderReviewInputs(inputs) {
   container.appendChild(details);
 }
 
+// Fetches GET /api/run/:id/review for a specific jobId and, if a review is
+// actually pending, renders it into the interactive card and switches to
+// the standalone "review" view so it's actually visible regardless of
+// whichever tab was showing before. Works independent of any active poll
+// loop - used both by maybeCheckForReview() below (while polling a job
+// this tab started/resumed) and by openPendingReview() (clicking a card
+// on the Pending Reviews tab, where there's no poll loop for that job at
+// all). Always shows the interactive card unconditionally - callers are
+// responsible for only calling this when currentRole === 'manager'
+// (maybeCheckForReview does; openPendingReview's caller can only be a
+// manager in the first place, since Pending Reviews is data-roles="manager"
+// only). Returns true if a review was actually shown, false if nothing is
+// pending for this job right now.
+async function loadAndShowReview(jobId) {
+  const res = await fetch(`/api/run/${jobId}/review`);
+  const data = await res.json();
+  // SWITCHED 2026-08-27 to the off-platform webhook mechanism (server.js
+  // has the full story) - there's no separate reviewId anymore, Opus's
+  // dispatch is keyed by jobId directly, so `pending` alone is the signal.
+  if (!data.pending) return false;
+
+  currentReviewJobId = jobId;
+  renderReviewInputs(data.inputs || {});
+  reviewPanel.hidden = false;
+  switchToView('review');
+  return true;
+}
+
 async function maybeCheckForReview(jobId) {
   if (reviewCheckInFlight || !reviewPanel.hidden || !reviewReadonlyPanel.hidden) return;
   reviewCheckInFlight = true;
   try {
-    const res = await fetch(`/api/run/${jobId}/review`);
-    const data = await res.json();
-    // SWITCHED 2026-08-27 to the off-platform webhook mechanism (server.js
-    // has the full story) - there's no separate reviewId anymore, Opus's
-    // dispatch is keyed by jobId directly, so `pending` alone is the signal.
-    if (data.pending) {
-      currentReviewJobId = jobId;
-      // Only a verified Compliance Officer sees the interactive Approve/
-      // Reject card - anyone else (KYC Agent, or no role set, e.g. after a
-      // same-tab refresh resets currentRole) gets a read-only notice
-      // instead. This is a client-side-only check - see server.js's
-      // /api/verify-role comment on what it doesn't protect.
-      if (currentRole === 'manager') {
-        renderReviewInputs(data.inputs || {});
-        reviewPanel.hidden = false;
-      } else {
+    // Only a verified Compliance Officer sees the interactive Approve/
+    // Reject card - anyone else (KYC Agent, or no role set, e.g. after a
+    // same-tab refresh resets currentRole) gets a read-only notice
+    // instead. This is a client-side-only check - see server.js's
+    // /api/verify-role comment on what it doesn't protect.
+    if (currentRole === 'manager') {
+      await loadAndShowReview(jobId);
+    } else {
+      const res = await fetch(`/api/run/${jobId}/review`);
+      const data = await res.json();
+      if (data.pending) {
+        currentReviewJobId = jobId;
         reviewReadonlyPanel.hidden = false;
       }
     }
@@ -661,10 +697,22 @@ reviewSubmitBtn.addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.error || 'Failed to submit review.');
 
     resetReview();
-    statusText.textContent = 'Review submitted — resuming workflow…';
-    // The main poll loop (started by the original pollStatus() call) never
-    // stopped while the review panel was up - it'll pick up progress past
-    // this node on its own next tick, no need to restart it here.
+    if (pollTimer) {
+      // Reached via the normal in-progress flow - the main poll loop
+      // (started by the original pollStatus() call) never stopped while
+      // the review panel was up, and it'll pick up progress past this
+      // node on its own next tick, no need to restart it here.
+      switchToView('intake');
+      statusText.textContent = 'Review submitted — resuming workflow…';
+    } else {
+      // Reached via the Pending Reviews tab - there's no poll loop for
+      // this job in this tab (it may belong to a case someone else
+      // started, or one this tab never polled). Just go back to the
+      // list, where it'll no longer appear now that its status has been
+      // cleared server-side.
+      switchToView('pending');
+      renderPendingReviews();
+    }
   } catch (err) {
     reviewError.textContent = err.message || 'Something went wrong submitting the review.';
     reviewError.hidden = false;
@@ -1035,7 +1083,7 @@ function renderQueueStats(containerId, entries) {
   const total = entries.length;
   const inProgress = entries.filter((e) => e.status === 'IN_PROGRESS').length;
   const completed = entries.filter((e) => e.status === 'COMPLETED').length;
-  const failed = entries.filter((e) => e.status && e.status !== 'IN_PROGRESS' && e.status !== 'COMPLETED').length;
+  const failed = entries.filter((e) => e.status && e.status !== 'IN_PROGRESS' && e.status !== 'COMPLETED' && e.status !== 'WAITING_REVIEW').length;
 
   const tiles = [
     { label: 'Total Cases', value: total },
@@ -1074,6 +1122,66 @@ async function renderCaseTable(tableWrapId, statsContainerId) {
     if (statsContainerId) renderQueueStats(statsContainerId, entries);
   } catch (err) {
     wrap.textContent = 'Could not load case history.';
+  }
+}
+
+async function renderPendingReviews() {
+  const wrap = document.getElementById('pending-reviews-list');
+  if (!wrap) return;
+  wrap.textContent = 'Loading…';
+
+  try {
+    const entries = await fetchCaseHistory();
+    const pending = entries.filter((e) => e.status === 'WAITING_REVIEW');
+    wrap.innerHTML = '';
+
+    if (!pending.length) {
+      const empty = document.createElement('div');
+      empty.className = 'data-table-empty';
+      empty.textContent = 'No cases are currently awaiting review.';
+      wrap.appendChild(empty);
+      return;
+    }
+
+    pending.forEach((entry) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'review-queue-card';
+      card.dataset.jobId = entry.jobId;
+
+      const title = document.createElement('div');
+      title.className = 'review-queue-card-title';
+      title.textContent = entry.applicantName || entry.title || `Case ${entry.jobId}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'review-queue-card-meta';
+      meta.textContent = `Case ${entry.jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
+
+      card.appendChild(title);
+      card.appendChild(meta);
+
+      card.addEventListener('click', () => openPendingReview(entry.jobId));
+      wrap.appendChild(card);
+    });
+  } catch (err) {
+    wrap.textContent = 'Could not load pending reviews.';
+  }
+}
+
+async function openPendingReview(jobId) {
+  try {
+    resetReview();
+    const found = await loadAndShowReview(jobId);
+    if (!found) {
+      // Dispatch not found (e.g. already resolved by someone else, or the
+      // in-memory pendingReviewDispatches entry was lost across a
+      // serverless cold start while Redis still shows WAITING_REVIEW) -
+      // refresh the list instead of showing a broken form.
+      renderPendingReviews();
+    }
+  } catch (err) {
+    console.error('open pending review error', err);
+    renderPendingReviews();
   }
 }
 

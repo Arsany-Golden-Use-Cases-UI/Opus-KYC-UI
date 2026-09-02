@@ -58,6 +58,7 @@
         <button type="button" class="nav-item" data-view="queue" data-roles="agent,manager">Case Queue</button>
         <button type="button" class="nav-item active" data-view="intake" data-roles="agent,manager">New Intake</button>
         <button type="button" class="nav-item" data-view="mycases" data-roles="manager">My Cases</button>
+        <button type="button" class="nav-item" data-view="pending" data-roles="manager">Pending Reviews</button>
         <button type="button" class="nav-item" data-view="sanctions" data-roles="manager">Sanctions Alerts</button>
         <button type="button" class="nav-item" data-view="reports" data-roles="manager">Reports</button>
         <button type="button" class="nav-item" data-view="settings" data-roles="agent,manager">Settings</button>
@@ -168,34 +169,6 @@
             </div>
           </div>
 
-          <section id="review-panel" class="card review-card" hidden>
-            <h2 class="card-title">Human Review Required</h2>
-            <p class="subtitle">This case is paused for manual review. Submit a decision to continue the workflow.</p>
-
-            <div class="field">
-              <label>Case Details</label>
-              <div id="review-inputs" class="settings-grid review-inputs"></div>
-            </div>
-
-            <div class="field">
-              <label>Can Approve?</label>
-              <div class="review-toggle-group">
-                <button type="button" id="review-approve-btn" class="review-toggle-btn">Approve</button>
-                <button type="button" id="review-reject-btn" class="review-toggle-btn">Reject</button>
-              </div>
-            </div>
-
-            <div class="field">
-              <label for="review-comments">Comments <span class="hint">(optional)</span></label>
-              <textarea id="review-comments" rows="4" placeholder="Notes for the case file…"></textarea>
-            </div>
-
-            <div id="review-error" class="error-banner" hidden></div>
-
-            <button type="button" id="review-submit-btn" class="btn btn-primary">Continue</button>
-            <p class="btn-caption">Reviews expire quickly — the case restarts from scratch if this isn't submitted in time.</p>
-          </section>
-
           <!-- Shown instead of #review-panel when currentRole !== "manager" - see
                maybeCheckForReview() in app.js. No interactive controls: a KYC
                Agent can see that a review is pending but not act on it. -->
@@ -245,6 +218,43 @@
           </p>
         </section>
 
+        <!-- ============== Human Review (standalone panel - no sidebar nav item
+             of its own). Reached two ways: automatically, mid-poll, when the
+             workflow you're actively watching pauses for review (see
+             loadAndShowReview() in app.js); or by clicking a card on the
+             Pending Reviews tab for a case you weren't already watching.
+             #review-panel itself is unchanged from before - only its
+             location moved, out of the New Intake panel. ============== -->
+        <section class="view-panel intake-narrow" data-view-panel="review" hidden>
+          <section id="review-panel" class="card review-card" hidden>
+            <h2 class="card-title">Human Review Required</h2>
+            <p class="subtitle">This case is paused for manual review. Submit a decision to continue the workflow.</p>
+
+            <div class="field">
+              <label>Case Details</label>
+              <div id="review-inputs" class="settings-grid review-inputs"></div>
+            </div>
+
+            <div class="field">
+              <label>Can Approve?</label>
+              <div class="review-toggle-group">
+                <button type="button" id="review-approve-btn" class="review-toggle-btn">Approve</button>
+                <button type="button" id="review-reject-btn" class="review-toggle-btn">Reject</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="review-comments">Comments <span class="hint">(optional)</span></label>
+              <textarea id="review-comments" rows="4" placeholder="Notes for the case file…"></textarea>
+            </div>
+
+            <div id="review-error" class="error-banner" hidden></div>
+
+            <button type="button" id="review-submit-btn" class="btn btn-primary">Continue</button>
+            <p class="btn-caption">Reviews expire quickly — the case restarts from scratch if this isn't submitted in time.</p>
+          </section>
+        </section>
+
         <!-- ============== My Cases (real data, same history) ============== -->
         <section class="view-panel" data-view-panel="mycases" hidden>
           <p class="card-eyebrow">Banking KYC / My Cases</p>
@@ -254,6 +264,18 @@
           <div class="card table-card">
             <div id="mycases-table-wrap"></div>
           </div>
+        </section>
+
+        <!-- ============== Pending Reviews (real data, filtered client-side from
+             /api/case-history for status === "WAITING_REVIEW"; manager-only -
+             see data-roles on the sidebar button). Each card opens that job's
+             review form via loadAndShowReview() in app.js. ============== -->
+        <section class="view-panel" data-view-panel="pending" hidden>
+          <p class="card-eyebrow">Banking KYC / Pending Reviews</p>
+          <h1 class="page-title">Pending reviews</h1>
+          <p class="subtitle">Cases currently paused for a Compliance Officer decision. Click a case to open its review form.</p>
+
+          <div id="pending-reviews-list" class="review-queue-list"></div>
         </section>
 
         <!-- ============== Sanctions Alerts (sample/mock data - preview only) ============== -->

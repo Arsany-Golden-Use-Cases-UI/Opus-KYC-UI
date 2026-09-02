@@ -1185,6 +1185,49 @@ details summary {
   vertical-align: middle;
 }
 
+/* ---------- Pending Reviews ---------- */
+
+.review-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.review-queue-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.review-queue-card:hover,
+.review-queue-card:focus-visible {
+  border-color: var(--color-accent, var(--color-heading));
+  transform: translateY(-1px);
+}
+
+.review-queue-card-title {
+  font-family: "Prompt", sans-serif;
+  font-weight: 500;
+  font-size: 1rem;
+  color: var(--color-heading);
+  margin-bottom: 0.35rem;
+}
+
+.review-queue-card-meta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
 /* ---------- Reports breakdown blocks ---------- */
 
 .report-grid {

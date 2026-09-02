@@ -478,7 +478,7 @@ app.get('/api/run/:id', async (req, res) => {
 const pendingReviewDispatches = new Map();
 let currentJobId = null;
 
-app.post('/api/opus-webhook/human-review', (req, res) => {
+app.post('/api/opus-webhook/human-review', async (req, res) => {
   const body = req.body || {};
   const { execution_id: jobId, callback, inputs, expected_output_schema: expectedOutputSchema } = body;
 
@@ -514,6 +514,18 @@ app.post('/api/opus-webhook/human-review', (req, res) => {
   pendingReviewDispatches.set(String(jobId), dispatchRecord);
   if (currentJobId) {
     pendingReviewDispatches.set(String(currentJobId), dispatchRecord);
+
+    // Persist "awaiting review" into the Redis-backed case history (keyed
+    // by jobExecutionId, i.e. currentJobId here - NOT Opus's raw
+    // execution_id above, which is a different id space entirely) so the
+    // Pending Reviews tab can list it. Deliberately not keyed off jobId:
+    // if currentJobId isn't set yet, we have no case-history entry to
+    // attach this to at all, so there's nothing correct to update.
+    try {
+      await updateHistoryEntry(currentJobId, { status: 'WAITING_REVIEW' });
+    } catch (historyErr) {
+      console.error('case history update error (webhook)', historyErr);
+    }
   }
 
   res.status(200).json({ received: true });
@@ -591,6 +603,19 @@ app.post('/api/run/:id/review', async (req, res) => {
     }
 
     pendingReviewDispatches.delete(jobId);
+
+    // Clear the awaiting-review state back to a normal in-progress status
+    // now that a decision has been submitted, so the case drops off the
+    // Pending Reviews list. jobId here is req.params.id, which the
+    // frontend always populates from the same jobExecutionId it polls
+    // with - the correct case-history key, unlike the dispatch's own
+    // execution_id (see the webhook handler above).
+    try {
+      await updateHistoryEntry(jobId, { status: 'IN_PROGRESS' });
+    } catch (historyErr) {
+      console.error('case history update error (review submit)', historyErr);
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('review complete error', err);
