@@ -100,19 +100,42 @@ img {
   flex-shrink: 0;
 }
 
-/* Compact variant of .btn/.btn-secondary for the header's tight vertical
-   space - overrides .btn's block/full-width default with an inline pill
-   roughly matching .header-status's height, small enough to sit beside the
-   badge without overflowing the header on typical widths. */
+/* Plain text link, not a filled button - deliberately understated so it
+   doesn't compete with the WORKFLOW LINKED badge next to it. Sized/typeset
+   to match that badge (same font-family/size) rather than looking like a
+   scaled-down .btn. */
 .header-back-btn {
   display: inline-flex;
   align-items: center;
   width: auto;
   flex-shrink: 0;
-  font-size: 0.72rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  cursor: pointer;
   white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.header-back-btn:hover {
+  color: var(--color-blue);
+  text-decoration: underline;
+}
+
+/* Brief highlight on click, since there's no more solid fill to signal
+   "this did something" - fades back out via the transition above rather
+   than needing a timed class toggle in JS. */
+.header-back-btn:active {
+  background-color: var(--color-blue-tint);
+  color: var(--color-blue);
 }
 
 /* Same author-vs-UA-stylesheet [hidden] issue as elsewhere in this file:
@@ -296,6 +319,20 @@ img {
 
 .role-gate-choices .btn {
   margin-top: 0;
+}
+
+/* Highlights whichever role is currently selected (see chooseRole() in
+   app.js) - the two role buttons stay visible/clickable throughout, so
+   this is the only visual signal for which one the password step below
+   actually applies to. Indigo instead of the buttons' default solid blue
+   (.btn-secondary) so "selected" reads as clearly distinct from the
+   ever-present default button look, not just a shade difference.
+   Chained with .btn (`.btn.role-choice-btn--active`, not just the
+   modifier alone) so its specificity beats .btn's own `background` rule
+   further down the file - equal specificity would otherwise let source
+   order decide, and .btn is defined later. */
+.btn.role-choice-btn--active {
+  background: var(--color-heading);
 }
 
 .role-gate-password-step {

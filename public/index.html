@@ -31,8 +31,8 @@
       <p class="subtitle">Select your role to continue.</p>
 
       <div id="role-gate-choices" class="role-gate-choices">
-        <button type="button" id="role-choice-agent" class="btn btn-secondary">KYC Agent</button>
-        <button type="button" id="role-choice-manager" class="btn btn-secondary">Compliance Officer</button>
+        <button type="button" id="role-choice-agent" class="btn btn-secondary role-choice-btn">KYC Agent</button>
+        <button type="button" id="role-choice-manager" class="btn btn-secondary role-choice-btn">Compliance Officer</button>
       </div>
 
       <div id="role-gate-password-step" class="role-gate-password-step" hidden>
@@ -44,7 +44,6 @@
         <div id="role-gate-error" class="error-banner" hidden></div>
 
         <button type="button" id="role-gate-submit-btn" class="btn btn-primary">Continue</button>
-        <button type="button" id="role-gate-choose-again-btn" class="btn btn-secondary">Choose a different role</button>
       </div>
     </section>
   </div>
@@ -79,16 +78,16 @@
             </span>
           </div>
           <div class="header-right">
+            <div class="header-status" title="This instance is configured against the Opus workflow API">
+              <span class="status-dot"></span>
+              Workflow Linked
+            </div>
             <!-- Single shared button for all three former per-view "Back to
                  role selection" buttons - see backToRoleSelection() /
                  revealIntakeForm() in app.js, which toggle this alongside
                  #intake-form-card so it tracks the same "role verified"
                  state instead of three separately-wired copies. -->
-            <button type="button" id="back-to-role-btn" class="btn btn-secondary header-back-btn" hidden>Back to role selection</button>
-            <div class="header-status" title="This instance is configured against the Opus workflow API">
-              <span class="status-dot"></span>
-              Workflow Linked
-            </div>
+            <button type="button" id="back-to-role-btn" class="header-back-btn" title="Back to role selection" hidden>Back</button>
           </div>
         </div>
       </header>

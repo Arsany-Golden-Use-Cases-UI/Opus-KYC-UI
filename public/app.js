@@ -20,14 +20,12 @@ let roleGateOnVerified = null;
 let pendingRoleChoice = null; // 'agent' | 'manager', chosen but not yet verified
 
 const roleGateOverlay = document.getElementById('role-gate');
-const roleGateChoices = document.getElementById('role-gate-choices');
 const roleChoiceAgentBtn = document.getElementById('role-choice-agent');
 const roleChoiceManagerBtn = document.getElementById('role-choice-manager');
 const roleGatePasswordStep = document.getElementById('role-gate-password-step');
 const roleGatePasswordInput = document.getElementById('role-gate-password');
 const roleGateError = document.getElementById('role-gate-error');
 const roleGateSubmitBtn = document.getElementById('role-gate-submit-btn');
-const roleGateChooseAgainBtn = document.getElementById('role-gate-choose-again-btn');
 
 // Opens the role gate overlay at the role-choice step. onVerified runs once,
 // right after a correct password closes the gate - callers decide what
@@ -36,7 +34,8 @@ const roleGateChooseAgainBtn = document.getElementById('role-gate-choose-again-b
 function openRoleGate(onVerified) {
   roleGateOnVerified = onVerified || null;
   pendingRoleChoice = null;
-  roleGateChoices.hidden = false;
+  roleChoiceAgentBtn.classList.remove('role-choice-btn--active');
+  roleChoiceManagerBtn.classList.remove('role-choice-btn--active');
   roleGatePasswordStep.hidden = true;
   roleGatePasswordInput.value = '';
   roleGateError.hidden = true;
@@ -51,23 +50,25 @@ function closeRoleGate() {
   pendingRoleChoice = null;
 }
 
+// Shared handler for both role buttons, which stay visible/clickable the
+// whole time (no more separate "choose again" step) - picking a role
+// reveals the password step if it wasn't already showing, and picking the
+// OTHER role while it's already showing just re-targets the selection:
+// re-highlights the clicked button and clears any typed password/error
+// left over from the previous choice.
 function chooseRole(role) {
   pendingRoleChoice = role;
-  roleGateChoices.hidden = true;
+  roleChoiceAgentBtn.classList.toggle('role-choice-btn--active', role === 'agent');
+  roleChoiceManagerBtn.classList.toggle('role-choice-btn--active', role === 'manager');
   roleGatePasswordStep.hidden = false;
   roleGateError.hidden = true;
+  roleGateError.textContent = '';
   roleGatePasswordInput.value = '';
   roleGatePasswordInput.focus();
 }
 
 roleChoiceAgentBtn.addEventListener('click', () => chooseRole('agent'));
 roleChoiceManagerBtn.addEventListener('click', () => chooseRole('manager'));
-
-roleGateChooseAgainBtn.addEventListener('click', () => {
-  pendingRoleChoice = null;
-  roleGatePasswordStep.hidden = true;
-  roleGateChoices.hidden = false;
-});
 
 roleGatePasswordInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
