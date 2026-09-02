@@ -266,77 +266,84 @@
              the same row skips this panel entirely and lands on the
              interactive review form instead, same as a Pending Reviews
              card. ============== -->
-        <section class="view-panel intake-narrow" data-view-panel="casedetail" hidden>
+        <section class="view-panel" data-view-panel="casedetail" hidden>
           <p class="card-eyebrow">Banking KYC / Case Detail</p>
           <h1 class="page-title" id="case-detail-title">Case</h1>
           <p class="subtitle" id="case-detail-subtitle"></p>
 
-          <section class="card">
-            <h2 class="card-title">Case Inputs</h2>
-            <div id="case-detail-inputs" class="settings-grid review-inputs"></div>
-          </section>
+          <!-- Inputs (left) + whatever status-dependent outcome applies
+               (right) - see .case-detail-columns in styles.css. Exactly one
+               of the four outcome elements below is ever visible at a time. -->
+          <div class="case-detail-columns">
+            <section class="card">
+              <h2 class="card-title">Case Inputs</h2>
+              <div id="case-detail-inputs" class="settings-grid review-inputs"></div>
+            </section>
 
-          <div id="case-detail-status-panel" class="status-banner" hidden>
-            <div class="status-top">
-              <div class="spinner"></div>
-              <div class="status-top-text">
-                <div id="case-detail-status-text">Processing…</div>
-                <div id="case-detail-status-elapsed" class="status-elapsed"></div>
-              </div>
-            </div>
+            <div class="case-detail-outcome">
+              <div id="case-detail-status-panel" class="status-banner" hidden>
+                <div class="status-top">
+                  <div class="spinner"></div>
+                  <div class="status-top-text">
+                    <div id="case-detail-status-text">Processing…</div>
+                    <div id="case-detail-status-elapsed" class="status-elapsed"></div>
+                  </div>
+                </div>
 
-            <div id="case-detail-status-progress" class="status-progress" hidden>
-              <div class="status-progress-header">
-                <span class="status-heading">Workflow Progress</span>
-                <span id="case-detail-status-steps-count" class="status-steps-count"></span>
+                <div id="case-detail-status-progress" class="status-progress" hidden>
+                  <div class="status-progress-header">
+                    <span class="status-heading">Workflow Progress</span>
+                    <span id="case-detail-status-steps-count" class="status-steps-count"></span>
+                  </div>
+                  <div class="progress-track">
+                    <div id="case-detail-progress-bar-fill" class="progress-bar-fill"></div>
+                    <div id="case-detail-progress-bar-running" class="progress-bar-running" hidden></div>
+                  </div>
+                  <div id="case-detail-status-step-pills" class="status-step-pills"></div>
+                </div>
               </div>
-              <div class="progress-track">
-                <div id="case-detail-progress-bar-fill" class="progress-bar-fill"></div>
-                <div id="case-detail-progress-bar-running" class="progress-bar-running" hidden></div>
-              </div>
-              <div id="case-detail-status-step-pills" class="status-step-pills"></div>
+
+              <!-- KYC Agent viewing a WAITING_REVIEW case - same static notice
+                   #review-readonly-panel shows during New Intake's own poll loop,
+                   duplicated here since both can be on screen in independent
+                   contexts at once. -->
+              <section id="case-detail-review-notice" class="card review-card" hidden>
+                <h2 class="card-title">⏳ Awaiting Compliance Officer Review</h2>
+                <p class="subtitle">This case has been escalated for compliance review. A Compliance Officer must approve or reject it before the case can proceed.</p>
+              </section>
+
+              <section id="case-detail-error-panel" class="card error-card" hidden>
+                <h2 class="card-title">Job Did Not Complete</h2>
+                <div id="case-detail-error-status" class="badge"></div>
+                <div id="case-detail-error-nodes"></div>
+              </section>
+
+              <section id="case-detail-results-panel" class="card results-card" hidden>
+                <h2 class="card-title">Result</h2>
+
+                <div class="result-headline">
+                  <div>
+                    <div class="result-label">Final Decision</div>
+                    <div id="case-detail-final-decision" class="badge badge-lg"></div>
+                  </div>
+                  <div class="routing-flag-group">
+                    <div class="result-label">Routing Flag</div>
+                    <div id="case-detail-routing-flag" class="badge"></div>
+                  </div>
+                </div>
+
+                <div class="result-section">
+                  <h3>Audit Summary</h3>
+                  <div id="case-detail-audit-summary" class="audit-summary"></div>
+                </div>
+
+                <div class="result-section">
+                  <h3>Case File</h3>
+                  <div id="case-detail-case-file"></div>
+                </div>
+              </section>
             </div>
           </div>
-
-          <!-- KYC Agent viewing a WAITING_REVIEW case - same static notice
-               #review-readonly-panel shows during New Intake's own poll loop,
-               duplicated here since both can be on screen in independent
-               contexts at once. -->
-          <section id="case-detail-review-notice" class="card review-card" hidden>
-            <h2 class="card-title">⏳ Awaiting Compliance Officer Review</h2>
-            <p class="subtitle">This case has been escalated for compliance review. A Compliance Officer must approve or reject it before the case can proceed.</p>
-          </section>
-
-          <section id="case-detail-error-panel" class="card error-card" hidden>
-            <h2 class="card-title">Job Did Not Complete</h2>
-            <div id="case-detail-error-status" class="badge"></div>
-            <div id="case-detail-error-nodes"></div>
-          </section>
-
-          <section id="case-detail-results-panel" class="card results-card" hidden>
-            <h2 class="card-title">Result</h2>
-
-            <div class="result-headline">
-              <div>
-                <div class="result-label">Final Decision</div>
-                <div id="case-detail-final-decision" class="badge badge-lg"></div>
-              </div>
-              <div class="routing-flag-group">
-                <div class="result-label">Routing Flag</div>
-                <div id="case-detail-routing-flag" class="badge"></div>
-              </div>
-            </div>
-
-            <div class="result-section">
-              <h3>Audit Summary</h3>
-              <div id="case-detail-audit-summary" class="audit-summary"></div>
-            </div>
-
-            <div class="result-section">
-              <h3>Case File</h3>
-              <div id="case-detail-case-file"></div>
-            </div>
-          </section>
         </section>
 
         <!-- ============== My Cases (real data, same history) ============== -->

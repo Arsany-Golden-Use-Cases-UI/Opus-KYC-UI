@@ -433,24 +433,82 @@ app.get('/api/run/:id', async (req, res) => {
 // (API reference section 4.7). Works for a case run long ago just as well
 // as one still in progress, since Opus is the only place this ever lived.
 //
-// UNVERIFIED AGAINST A LIVE CALL as of 2026-09-02 (same caveat as the HITL
-// webhook code above - this sandbox has no network path to
-// operator.opus.com): the reference describes `input` as a "raw object"
-// without pinning down whether each value comes back bare or still
-// wrapped as {value, type} the way jobPayloadSchemaInstance sent it.
-// Unwrapped defensively client-side (see unwrapReviewValue in app.js,
-// already written to handle either shape) rather than guessed at here.
+// The `input` object's own keys are Opus's opaque Input-node variable
+// names (e.g. workflow_input_6o3r11awf), not human-readable - see
+// fetchInputLabels() below for where the real label comes from.
+//
+// CONFIRMED LIVE 2026-09-02 (this sandbox does have a network path to
+// operator.opus.com after all - an earlier comment here claiming
+// otherwise was stale): whether each `input` value comes back bare or
+// still wrapped as {value, type} the way jobPayloadSchemaInstance sent it
+// was NOT re-checked against a real job - that would mean starting a real
+// job, a side-effecting action outside what this investigation called
+// for. Still unwrapped defensively client-side either way (see
+// unwrapReviewValue in app.js, already written to handle both shapes).
 app.get('/api/run/:id/inputs', async (req, res) => {
   try {
     const jobId = req.params.id;
     const detailRes = await opusFetch(`/job/${jobId}`);
     const detail = await detailRes.json();
-    res.json({ inputs: detail.input || {} });
+    const rawInputs = detail.input || {};
+
+    // Best-effort - a slow/unreachable workflow-schema call should never
+    // break the inputs response itself, just fall back to unlabeled
+    // (renderReviewInputs() in app.js already humanizes the raw key when
+    // no label is present, same as before this existed).
+    let labels = {};
+    try {
+      labels = await fetchInputLabels();
+    } catch (labelErr) {
+      console.error('input label fetch error', labelErr);
+    }
+
+    const inputs = {};
+    for (const [varName, entry] of Object.entries(rawInputs)) {
+      const wrapped = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : { value: entry };
+      inputs[varName] = { ...wrapped, label: labels[varName] };
+    }
+
+    res.json({ inputs });
   } catch (err) {
     console.error('case inputs fetch error', err);
     res.status(500).json({ error: err.message || 'Failed to fetch case inputs.' });
   }
 });
+
+// variable_name -> display_name for the workflow's Input node, e.g.
+// workflow_input_6o3r11awf -> "ID Document". Powers the labels above.
+//
+// CONFIRMED LIVE 2026-09-02 against this exact workflow via /api/schema:
+// the API reference's documented response shape for GET
+// /workflow/{workflowId} (a top-level jobPayloadSchema) is wrong for this
+// workflow - already flagged in README's "Corrections to the API
+// reference" (section 4.1). The real path, and where display_name/
+// description actually live, is:
+//   nodes[workflow_input_node_id].input_schema.schema[variable_name]
+// No hardcoded id->label mapping needed - this workflow only ever has
+// these same 4 fixed input variables, and fetching live keeps labels
+// correct automatically if they're ever edited in the Opus builder.
+async function fetchInputLabels() {
+  // Labels are a nice-to-have on top of the inputs response, not
+  // load-bearing (the raw-key fallback in GET /api/run/:id/inputs above
+  // covers a missing/failed call just fine) - but neither fetch() nor
+  // opusFetch's own retry loop has any timeout of its own, only retries on
+  // an actual 429/5xx response. A connection that just hangs (no response
+  // at all) would otherwise block the whole inputs response indefinitely.
+  // Bounded here so a slow/unreachable workflow-schema call degrades to
+  // "no labels" within a few seconds instead of hanging the request.
+  const schemaRes = await opusFetch(`/workflow/${OPUS_WORKFLOW_ID}`, { signal: AbortSignal.timeout(5000) });
+  const workflow = await schemaRes.json();
+  const inputNode = workflow.nodes?.[workflow.workflow_input_node_id];
+  const schema = (inputNode && inputNode.input_schema && inputNode.input_schema.schema) || {};
+
+  const labels = {};
+  for (const [varName, def] of Object.entries(schema)) {
+    if (def && def.display_name) labels[varName] = def.display_name;
+  }
+  return labels;
+}
 
 // ---------------------------------------------------------------------
 // Off-platform Human Review (API reference section 9.2)

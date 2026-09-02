@@ -487,6 +487,28 @@ img {
   width: 100%;
 }
 
+/* Case Detail: inputs (left) + whichever status-dependent outcome applies
+   (right), side by side. Single column once the two cards would otherwise
+   get too cramped to read comfortably. */
+.case-detail-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.case-detail-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+@media (max-width: 860px) {
+  .case-detail-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .page-title {
   margin: 0 0 0.25rem;
   font-size: 1.35rem;

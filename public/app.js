@@ -666,11 +666,16 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
 
     const label = document.createElement('div');
     label.className = 'settings-row-label';
-    // Strip Opus's workflow_input_/workflow_output_ id prefix before
-    // humanizing - what's left is sometimes still an opaque id fragment
-    // rather than a real label, but that's still more scannable than the
-    // full prefixed id, and the raw-JSON view below has the ground truth.
-    label.textContent = humanizeLabel(key.replace(/^workflow_(input|output)_/, ''));
+    // A case-detail input (server.js's GET /api/run/:id/inputs) carries a
+    // real label fetched live from the workflow's Input node definition -
+    // prefer that. A HITL review dispatch's inputs (the other caller of
+    // this function) never have one, so this falls back to the same
+    // strip-the-id-prefix-and-humanize heuristic as before - what's left
+    // is sometimes still an opaque id fragment rather than a real label,
+    // but that's still more scannable than the full prefixed id, and the
+    // raw-JSON view below has the ground truth either way.
+    const rawLabel = rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue) ? rawValue.label : null;
+    label.textContent = rawLabel || humanizeLabel(key.replace(/^workflow_(input|output)_/, ''));
 
     const valueEl = document.createElement('div');
     valueEl.className = 'settings-row-value';
