@@ -274,7 +274,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
 app.post('/api/run', async (req, res) => {
   try {
-    const { idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, screeningPolicy, title } = req.body;
+    const { idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, screeningPolicy, title, ranBy } = req.body;
 
     if (!idDocumentFileUrl) return res.status(400).json({ error: 'ID Document file is required.' });
     if (!proofOfAddressFileUrl) return res.status(400).json({ error: 'Proof of Address file is required.' });
@@ -336,6 +336,11 @@ app.post('/api/run', async (req, res) => {
         finalDecision: null,
         routingFlag: null,
         completedAt: null,
+        // Required client-side at the role gate (public/app.js's
+        // roleGateSubmitBtn handler) - null only ever appears on a case
+        // run before this field existed, and the UI degrades that to the
+        // same '—' placeholder every other optional field here already uses.
+        ranBy: ranBy || null,
       });
     } catch (historyErr) {
       console.error('case history log error', historyErr);
@@ -629,7 +634,7 @@ app.get('/api/run/:id/review', (req, res) => {
 app.post('/api/run/:id/review', async (req, res) => {
   try {
     const jobId = req.params.id;
-    const { canApprove, comments } = req.body;
+    const { canApprove, comments, reviewedBy } = req.body;
 
     const dispatch = pendingReviewDispatches.get(jobId);
     if (!dispatch) {
@@ -695,7 +700,9 @@ app.post('/api/run/:id/review', async (req, res) => {
     // with - the correct case-history key, unlike the dispatch's own
     // execution_id (see the webhook handler above).
     try {
-      await updateHistoryEntry(jobId, { status: 'IN_PROGRESS' });
+      // Required client-side at the role gate, same as ranBy above - null
+      // only on a review submitted before this field existed.
+      await updateHistoryEntry(jobId, { status: 'IN_PROGRESS', reviewedBy: reviewedBy || null });
     } catch (historyErr) {
       console.error('case history update error (review submit)', historyErr);
     }

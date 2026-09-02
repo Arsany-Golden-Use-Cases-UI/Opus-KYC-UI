@@ -16,6 +16,12 @@ startBtn.addEventListener('click', () => {
 // server.js's /api/verify-role comment: this is a client-side UI gate
 // only, not real access control on the routes it's meant to protect.
 let currentRole = null;
+// Free-text, required alongside the password - tracked with every case a
+// person runs or reviews (see the ranBy/reviewedBy fields sent alongside
+// POST /api/run and POST /api/run/:id/review below). Same set/reset
+// lifecycle as currentRole: set together on a verified Continue, cleared
+// together in backToRoleSelection().
+let currentUserName = null;
 let roleGateOnVerified = null;
 let pendingRoleChoice = null; // 'agent' | 'manager', chosen but not yet verified
 
@@ -23,6 +29,7 @@ const roleGateOverlay = document.getElementById('role-gate');
 const roleChoiceAgentBtn = document.getElementById('role-choice-agent');
 const roleChoiceManagerBtn = document.getElementById('role-choice-manager');
 const roleGatePasswordStep = document.getElementById('role-gate-password-step');
+const roleGateNameInput = document.getElementById('role-gate-name');
 const roleGatePasswordInput = document.getElementById('role-gate-password');
 const roleGateError = document.getElementById('role-gate-error');
 const roleGateSubmitBtn = document.getElementById('role-gate-submit-btn');
@@ -37,6 +44,7 @@ function openRoleGate(onVerified) {
   roleChoiceAgentBtn.classList.remove('role-choice-btn--active');
   roleChoiceManagerBtn.classList.remove('role-choice-btn--active');
   roleGatePasswordStep.hidden = true;
+  roleGateNameInput.value = '';
   roleGatePasswordInput.value = '';
   roleGateError.hidden = true;
   roleGateError.textContent = '';
@@ -55,7 +63,10 @@ function closeRoleGate() {
 // reveals the password step if it wasn't already showing, and picking the
 // OTHER role while it's already showing just re-targets the selection:
 // re-highlights the clicked button and clears any typed password/error
-// left over from the previous choice.
+// left over from the previous choice. The name isn't cleared here - it's
+// the same person's identity regardless of which role they end up
+// claiming, unlike the password/error, which are role-specific-feeling
+// artifacts of the previous choice.
 function chooseRole(role) {
   pendingRoleChoice = role;
   roleChoiceAgentBtn.classList.toggle('role-choice-btn--active', role === 'agent');
@@ -64,22 +75,37 @@ function chooseRole(role) {
   roleGateError.hidden = true;
   roleGateError.textContent = '';
   roleGatePasswordInput.value = '';
-  roleGatePasswordInput.focus();
+  (roleGateNameInput.value ? roleGatePasswordInput : roleGateNameInput).focus();
 }
 
 roleChoiceAgentBtn.addEventListener('click', () => chooseRole('agent'));
 roleChoiceManagerBtn.addEventListener('click', () => chooseRole('manager'));
 
-roleGatePasswordInput.addEventListener('keydown', (e) => {
+function submitRoleGateOnEnter(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
     roleGateSubmitBtn.click();
   }
-});
+}
+roleGateNameInput.addEventListener('keydown', submitRoleGateOnEnter);
+roleGatePasswordInput.addEventListener('keydown', submitRoleGateOnEnter);
 
 roleGateSubmitBtn.addEventListener('click', async () => {
   if (!pendingRoleChoice) return;
   roleGateError.hidden = true;
+
+  const name = roleGateNameInput.value.trim();
+  const password = roleGatePasswordInput.value;
+  // A blank name shouldn't get past the gate any more than a blank
+  // password would - checked before ever hitting the network, same as
+  // the intake form's own field checks (see showError() call sites
+  // above) validate on submit rather than live-disabling the button.
+  if (!name || !password) {
+    roleGateError.textContent = 'Enter your name and password to continue.';
+    roleGateError.hidden = false;
+    return;
+  }
+
   roleGateSubmitBtn.disabled = true;
   roleGateSubmitBtn.textContent = 'Checking…';
 
@@ -87,12 +113,13 @@ roleGateSubmitBtn.addEventListener('click', async () => {
     const res = await fetch('/api/verify-role', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: pendingRoleChoice, password: roleGatePasswordInput.value }),
+      body: JSON.stringify({ role: pendingRoleChoice, password }),
     });
     const data = await res.json();
 
     if (res.ok && data.ok) {
       currentRole = pendingRoleChoice;
+      currentUserName = name;
       applyRoleRestrictions();
       const onVerified = roleGateOnVerified;
       closeRoleGate();
@@ -571,7 +598,7 @@ async function startRun({ idDocumentFile, proofOfAddressFile, applicationFormJso
     const runRes = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, screeningPolicy }),
+      body: JSON.stringify({ idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, screeningPolicy, ranBy: currentUserName }),
     });
     const runData = await runRes.json();
     if (!runRes.ok) throw new Error(runData.error || 'Failed to start job.');
@@ -771,7 +798,7 @@ reviewSubmitBtn.addEventListener('click', async () => {
     const res = await fetch(`/api/run/${currentReviewJobId}/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ canApprove: reviewCanApprove, comments: reviewComments.value }),
+      body: JSON.stringify({ canApprove: reviewCanApprove, comments: reviewComments.value, reviewedBy: currentUserName }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to submit review.');
@@ -1158,12 +1185,16 @@ const CASE_TABLE_COLUMNS = [
   { label: 'Case', render: (row) => (row.title || 'Banking KYC run') },
   { label: 'Applicant', render: (row) => row.applicantName || '\u2014' },
   { label: 'Submitted', render: (row) => formatTimestamp(row.submittedAt) },
+  // Absent on any case run before this field existed - degrades to the
+  // same '\u2014' placeholder every other optional column here already uses.
+  { label: 'Ran by', render: (row) => row.ranBy || '\u2014' },
   {
     label: 'Status',
     render: (row) => buildBadgeSpan(row.status, JOB_STATUS_TONE[row.status] || (row.status === 'COMPLETED' ? 'green' : 'neutral')),
   },
   { label: 'Decision', render: (row) => (row.finalDecision ? buildBadgeSpan(row.finalDecision) : '\u2014') },
   { label: 'Routing', render: (row) => (row.routingFlag ? buildBadgeSpan(row.routingFlag) : '\u2014') },
+  { label: 'Reviewed by', render: (row) => row.reviewedBy || '\u2014' },
   {
     label: 'Duration',
     render: (row) => {
@@ -1373,7 +1404,14 @@ async function loadAndShowCaseDetail(jobId, entry) {
   switchToView('casedetail');
 
   caseDetailTitle.textContent = entry.applicantName || entry.title || `Case ${jobId}`;
-  caseDetailSubtitle.textContent = `Case ${jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
+  let subtitle = `Case ${jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
+  // Appended only when present, unlike the table columns' unconditional
+  // '—' fallback - most cases are never reviewed at all (no HITL pause),
+  // so "Reviewed by —" would be permanent noise here rather than a
+  // meaningful "missing data" signal.
+  if (entry.ranBy) subtitle += ` · Ran by ${entry.ranBy}`;
+  if (entry.reviewedBy) subtitle += ` · Reviewed by ${entry.reviewedBy}`;
+  caseDetailSubtitle.textContent = subtitle;
 
   try {
     const inputsRes = await fetch(`/api/run/${jobId}/inputs`);
@@ -1620,6 +1658,7 @@ resetBtn.addEventListener('click', () => {
 function backToRoleSelection() {
   stopPolling();
   currentRole = null;
+  currentUserName = null;
   applyRoleRestrictions();
   setBusy(false);
   intakeFormCard.hidden = true;
