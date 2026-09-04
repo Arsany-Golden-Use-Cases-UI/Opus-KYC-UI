@@ -472,7 +472,7 @@ img {
    via :has() rather than raising .content's cap globally, which would
    also widen Case Detail, Pending Reviews, Reports, and Settings - none
    of which need or asked for it (same reasoning as .review-wide/
-   .intake-narrow scoping the review panel and New Intake's form widths
+   .intake-wide scoping the review panel and New Intake's form widths
    independently of each other). */
 .content:has(> [data-view-panel="queue"]:not([hidden])) {
   max-width: 1600px;
@@ -493,10 +493,14 @@ img {
   display: none;
 }
 
-/* Only "New Intake" keeps the original narrow, centered form width - every
-   other tab (tables/tiles) uses the full .content width above. */
-.intake-narrow {
-  max-width: 640px;
+/* New Intake's form. Was 640px back when the Application Form was a single
+   raw JSON textarea; now that it's ~30 labeled inputs grouped into
+   two-and-three-across sections, that was far too tight. Same dedicated,
+   independently-tunable class as .review-wide below rather than one shared
+   "wide" class, so either panel's width can change without moving the
+   other. */
+.intake-wide {
+  max-width: 960px;
   margin: 0 auto;
   width: 100%;
 }
@@ -626,9 +630,19 @@ label {
   color: var(--color-text-muted);
 }
 
+/* Every text-like control the app uses shares one look. Keep this list in
+   sync when adding a new input type - a type that's missing here falls
+   through to unstyled browser defaults (white box, hard border), which is
+   exactly how the "Your name" field ended up mismatched against Password
+   before type="text" was added. */
 input[type="file"],
 input[type="password"],
 input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+select,
 textarea {
   width: 100%;
   padding: 0.65rem 0.8rem;
@@ -640,16 +654,98 @@ textarea {
   color: var(--color-text-secondary);
 }
 
+/* Native select keeps its own dropdown arrow (no custom chevron), just
+   matched to the inputs around it. */
+select {
+  cursor: pointer;
+}
+
 textarea {
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 textarea:focus,
+select:focus,
 input:focus {
   outline: none;
   border-color: var(--color-blue);
   box-shadow: 0 0 0 4px rgba(56, 123, 240, 0.32);
+}
+
+/* ---------- Grouped form sections (New Intake's Application Form) ---------- */
+
+/* A titled group of related fields inside the intake card, separated by a
+   hairline rule rather than nested cards - keeps ~30 inputs scannable
+   without stacking a card inside a card. */
+.form-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.form-section-title {
+  margin: 0 0 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-heading);
+}
+
+/* Two-across by default, three for the city/emirate/country row. Children
+   are plain .field divs, so each keeps its own bottom margin for vertical
+   rhythm and the gap here only has to handle the horizontal gutter. */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+.field-row-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Single column once the columns would get too cramped to read. */
+@media (max-width: 620px) {
+  .field-row,
+  .field-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 2rem;
+  margin-bottom: 1.4rem;
+}
+
+/* Overrides the global block/uppercase/mono label style for checkboxes,
+   where the text belongs beside the box in normal sentence case rather
+   than stacked above it as a micro-label. */
+.field-check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.field-check input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--color-blue);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* ---------- Buttons ---------- */

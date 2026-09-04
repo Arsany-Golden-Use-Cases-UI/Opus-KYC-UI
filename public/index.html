@@ -112,7 +112,7 @@
         </section>
 
         <!-- ============== New Intake (the real, functional page) ============== -->
-        <section class="view-panel intake-narrow" data-view-panel="intake">
+        <section class="view-panel intake-wide" data-view-panel="intake">
           <!-- Hidden until a role is verified - see revealIntakeForm() /
                openRoleGate() in app.js. Not visible behind or before the
                role gate: it starts hidden in the markup itself, not just
@@ -133,9 +133,239 @@
                 <input type="file" id="proof-of-address" name="proofOfAddress" accept="application/pdf" required>
               </div>
 
-              <div class="field">
-                <label for="application-form-json">Application Form JSON</label>
-                <textarea id="application-form-json" name="applicationFormJson" rows="8" placeholder='{ "applicantName": "..." }' required></textarea>
+              <!-- Structured replacement for what used to be a single raw
+                   "Application Form JSON" textarea. Assembled into the exact
+                   nested JSON shape on submit by buildApplicationFormJson()
+                   in app.js, which writes every key unconditionally - a field
+                   left blank becomes ""/0/false/[] rather than a missing key,
+                   so the workflow's Input node always gets a complete object.
+                   Field ids are af-* ("application form") to keep them clearly
+                   separate from the surrounding form's own inputs. -->
+              <div class="form-section">
+                <h3 class="form-section-title">Applicant Details</h3>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-full-name">Full Name</label>
+                    <input type="text" id="af-full-name">
+                  </div>
+                  <div class="field">
+                    <label for="af-date-of-birth">Date of Birth</label>
+                    <input type="date" id="af-date-of-birth">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-nationality">Nationality</label>
+                    <input type="text" id="af-nationality">
+                  </div>
+                  <div class="field">
+                    <label for="af-place-of-birth">Place of Birth</label>
+                    <input type="text" id="af-place-of-birth">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-sex">Sex</label>
+                    <select id="af-sex">
+                      <option value="">Select…</option>
+                      <option value="M">M</option>
+                      <option value="F">F</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="af-marital-status">Marital Status</label>
+                    <select id="af-marital-status">
+                      <option value="">Select…</option>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Divorced">Divorced</option>
+                      <option value="Widowed">Widowed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-residency-status">Residency Status</label>
+                    <select id="af-residency-status">
+                      <option value="">Select…</option>
+                      <option value="UAE Resident">UAE Resident</option>
+                      <option value="UAE National">UAE National</option>
+                      <option value="GCC National">GCC National</option>
+                      <option value="Non-Resident">Non-Resident</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="af-emirates-id-number">Emirates ID Number</label>
+                    <input type="text" id="af-emirates-id-number" placeholder="784-1992-1234567-1">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-passport-number">Passport Number</label>
+                    <input type="text" id="af-passport-number">
+                  </div>
+                  <div class="field">
+                    <label for="af-passport-country">Passport Country</label>
+                    <input type="text" id="af-passport-country">
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3 class="form-section-title">Contact Details</h3>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-mobile">Mobile</label>
+                    <input type="tel" id="af-mobile" placeholder="+971-50-1234567">
+                  </div>
+                  <div class="field">
+                    <label for="af-email">Email</label>
+                    <input type="email" id="af-email">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-address-line-1">Address Line 1</label>
+                    <input type="text" id="af-address-line-1">
+                  </div>
+                  <div class="field">
+                    <label for="af-address-line-2">Address Line 2</label>
+                    <input type="text" id="af-address-line-2">
+                  </div>
+                </div>
+
+                <div class="field-row field-row-3">
+                  <div class="field">
+                    <label for="af-address-city">City</label>
+                    <input type="text" id="af-address-city">
+                  </div>
+                  <div class="field">
+                    <label for="af-address-emirate">Emirate</label>
+                    <select id="af-address-emirate">
+                      <option value="">Select…</option>
+                      <option value="Abu Dhabi">Abu Dhabi</option>
+                      <option value="Dubai">Dubai</option>
+                      <option value="Sharjah">Sharjah</option>
+                      <option value="Ajman">Ajman</option>
+                      <option value="Umm Al Quwain">Umm Al Quwain</option>
+                      <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+                      <option value="Fujairah">Fujairah</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="af-address-country">Country</label>
+                    <input type="text" id="af-address-country">
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3 class="form-section-title">Employment</h3>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-employment-status">Employment Status</label>
+                    <select id="af-employment-status">
+                      <option value="">Select…</option>
+                      <option value="Employed">Employed</option>
+                      <option value="Self-Employed">Self-Employed</option>
+                      <option value="Unemployed">Unemployed</option>
+                      <option value="Retired">Retired</option>
+                      <option value="Student">Student</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="af-employer">Employer</label>
+                    <input type="text" id="af-employer">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-occupation">Occupation</label>
+                    <input type="text" id="af-occupation">
+                  </div>
+                  <div class="field">
+                    <label for="af-industry">Industry</label>
+                    <input type="text" id="af-industry">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-monthly-income-aed">Monthly Income (AED)</label>
+                    <input type="number" id="af-monthly-income-aed" min="0" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="af-years-at-employer">Years at Employer</label>
+                    <input type="number" id="af-years-at-employer" min="0" step="1">
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3 class="form-section-title">Account &amp; Compliance</h3>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-product-requested">Product Requested</label>
+                    <input type="text" id="af-product-requested">
+                  </div>
+                  <div class="field">
+                    <label for="af-source-of-funds">Source of Funds</label>
+                    <input type="text" id="af-source-of-funds">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-expected-monthly-deposits-aed">Expected Monthly Deposits (AED)</label>
+                    <input type="number" id="af-expected-monthly-deposits-aed" min="0" step="1">
+                  </div>
+                  <div class="field">
+                    <label for="af-expected-transaction-volume">Expected Transaction Volume</label>
+                    <select id="af-expected-transaction-volume">
+                      <option value="">Select…</option>
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label for="af-branch">Branch</label>
+                    <input type="text" id="af-branch">
+                  </div>
+                  <div class="field">
+                    <label for="af-channel">Channel</label>
+                    <input type="text" id="af-channel">
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="af-tax-residency-countries">Tax Residency Countries <span class="hint">(comma-separated)</span></label>
+                  <input type="text" id="af-tax-residency-countries" placeholder="United Arab Emirates, Singapore">
+                </div>
+
+                <div class="field-check-row">
+                  <label class="field-check">
+                    <input type="checkbox" id="af-pep-self-declaration">
+                    <span>PEP Self-Declaration</span>
+                  </label>
+                  <label class="field-check">
+                    <input type="checkbox" id="af-us-person-for-fatca">
+                    <span>US Person for FATCA</span>
+                  </label>
+                </div>
               </div>
 
               <div class="field">

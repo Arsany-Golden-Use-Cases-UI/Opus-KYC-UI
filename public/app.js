@@ -526,13 +526,81 @@ async function uploadFile(file, kind) {
   return data.fileUrl;
 }
 
+// Assembles the Application Form JSON from the structured intake fields
+// that replaced what used to be one raw textarea (see the af-* inputs in
+// index.html). Every key in the shape is written unconditionally from this
+// literal rather than by iterating over whatever happens to be filled in,
+// so a blank field lands as ""/0/false/[] and the workflow's Input node
+// always receives the complete object. Returns a STRING, not an object:
+// server.js sends this to Opus as type 'json_string' (see the README
+// correction on why that type matters), so it must stay serialized.
+function buildApplicationFormJson() {
+  const str = (id) => (document.getElementById(id).value || '').trim();
+  // '' -> 0, and any non-numeric text -> 0 rather than NaN, which would
+  // serialize as null and drop the number-ness of the field.
+  const num = (id) => Number(str(id)) || 0;
+  const bool = (id) => document.getElementById(id).checked;
+
+  return JSON.stringify({
+    applicant: {
+      full_name: str('af-full-name'),
+      date_of_birth: str('af-date-of-birth'),
+      nationality: str('af-nationality'),
+      place_of_birth: str('af-place-of-birth'),
+      sex: str('af-sex'),
+      marital_status: str('af-marital-status'),
+      residency_status: str('af-residency-status'),
+      emirates_id_number: str('af-emirates-id-number'),
+      passport_number: str('af-passport-number'),
+      passport_country: str('af-passport-country'),
+    },
+    contact: {
+      mobile: str('af-mobile'),
+      email: str('af-email'),
+      address: {
+        line_1: str('af-address-line-1'),
+        line_2: str('af-address-line-2'),
+        city: str('af-address-city'),
+        emirate: str('af-address-emirate'),
+        country: str('af-address-country'),
+      },
+    },
+    employment: {
+      status: str('af-employment-status'),
+      employer: str('af-employer'),
+      occupation: str('af-occupation'),
+      industry: str('af-industry'),
+      monthly_income_aed: num('af-monthly-income-aed'),
+      years_at_employer: num('af-years-at-employer'),
+    },
+    source_of_funds: str('af-source-of-funds'),
+    expected_monthly_deposits_aed: num('af-expected-monthly-deposits-aed'),
+    expected_transaction_volume: str('af-expected-transaction-volume'),
+    pep_self_declaration: bool('af-pep-self-declaration'),
+    us_person_for_fatca: bool('af-us-person-for-fatca'),
+    // Comma-separated in the UI - split, trimmed, and empties dropped, so
+    // a blank input yields [] rather than [""], and "a, ,b" yields two
+    // entries rather than three.
+    tax_residency_countries: str('af-tax-residency-countries')
+      .split(',')
+      .map((country) => country.trim())
+      .filter(Boolean),
+    product_requested: str('af-product-requested'),
+    branch: str('af-branch'),
+    channel: str('af-channel'),
+    // Auto-stamped at submit rather than being a user field - same
+    // toISOString() format as case history's submittedAt/completedAt.
+    submitted_at: new Date().toISOString(),
+  });
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   clearError();
 
   const idDocumentFile = document.getElementById('id-document').files[0];
   const proofOfAddressFile = document.getElementById('proof-of-address').files[0];
-  const applicationFormJson = document.getElementById('application-form-json').value.trim();
+  const applicationFormJson = buildApplicationFormJson();
   const screeningPolicy = document.getElementById('screening-policy').value.trim();
 
   if (!idDocumentFile || !proofOfAddressFile) {
@@ -547,12 +615,10 @@ form.addEventListener('submit', async (e) => {
     showError('Proof of Address must be 10MB or smaller.');
     return;
   }
-  try {
-    JSON.parse(applicationFormJson);
-  } catch {
-    showError('Application Form JSON is not valid JSON.');
-    return;
-  }
+  // No JSON.parse check for applicationFormJson anymore -
+  // buildApplicationFormJson() constructs and serializes it, so malformed
+  // JSON is no longer reachable. Screening Policy is still a raw textarea,
+  // so it still needs validating.
   try {
     JSON.parse(screeningPolicy);
   } catch {
