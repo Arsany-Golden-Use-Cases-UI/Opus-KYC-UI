@@ -10,11 +10,14 @@ startBtn.addEventListener('click', () => {
 // ============================================================
 // Role gate: who is running this case? (KYC Agent / Compliance Officer)
 // ============================================================
-// currentRole persists only for this page's JS session (a plain variable,
-// not sessionStorage/localStorage) - it resets to null on every reload,
-// including the same-tab-refresh resume path further down. See
-// server.js's /api/verify-role comment: this is a client-side UI gate
-// only, not real access control on the routes it's meant to protect.
+// currentRole survives a refresh, but only within this browser tab: it's
+// mirrored into sessionStorage (see saveRoleSession() below), NOT
+// localStorage, so closing the tab or the browser drops it and a shared
+// compliance workstation doesn't stay verified indefinitely. Only the
+// verified role and name are stored - never the password. See server.js's
+// /api/verify-role comment: this is a client-side UI gate only, not real
+// access control on the routes it's meant to protect, and persisting it
+// doesn't change that either way.
 let currentRole = null;
 // Free-text, required alongside the password - tracked with every case a
 // person runs or reviews (see the ranBy/reviewedBy fields sent alongside
@@ -33,6 +36,76 @@ const roleGateNameInput = document.getElementById('role-gate-name');
 const roleGatePasswordInput = document.getElementById('role-gate-password');
 const roleGateError = document.getElementById('role-gate-error');
 const roleGateSubmitBtn = document.getElementById('role-gate-submit-btn');
+
+// Tab-scoped persistence of a verified role, so a refresh doesn't send
+// someone back through the gate they cleared seconds ago. Stores only
+// { role, name } - the password is never written anywhere.
+const ROLE_SESSION_KEY = 'kyc-role-session';
+
+// Keep in sync with the two role-choice buttons above and server.js's
+// ROLE_PASSWORDS. Used to validate what comes back out of storage: if the
+// valid roles ever change, a stored value from an older build is treated
+// as no session at all rather than trusted blindly.
+const VALID_ROLES = ['agent', 'manager'];
+
+// Every one of these wraps storage access in try/catch: sessionStorage
+// itself can throw (private mode, storage disabled, sandboxed iframe),
+// and a storage failure should degrade to "the gate just doesn't persist"
+// rather than breaking the gate - or, on write, failing a verification
+// that has already succeeded.
+function saveRoleSession(role, name) {
+  try {
+    sessionStorage.setItem(ROLE_SESSION_KEY, JSON.stringify({ role, name }));
+  } catch (err) {
+    console.error('role session save error', err);
+  }
+}
+
+function clearRoleSession() {
+  try {
+    sessionStorage.removeItem(ROLE_SESSION_KEY);
+  } catch (err) {
+    console.error('role session clear error', err);
+  }
+}
+
+// Restores currentRole/currentUserName from a previous verification in
+// this tab. Returns true only if a usable session was found, so the
+// caller knows whether to skip the gate. Anything malformed is dropped
+// rather than left to linger - same fall-back-to-a-known-good-state
+// approach as the screening policy's corrupt-value guard in server.js.
+function restoreRoleSession() {
+  let raw;
+  try {
+    raw = sessionStorage.getItem(ROLE_SESSION_KEY);
+  } catch (err) {
+    console.error('role session read error', err);
+    return false;
+  }
+  if (!raw) return false;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    clearRoleSession();
+    return false;
+  }
+
+  const role = parsed && parsed.role;
+  const name = parsed && typeof parsed.name === 'string' ? parsed.name.trim() : '';
+
+  // A blank name is rejected for the same reason the gate itself requires
+  // one: it's what ends up on the case as ranBy/reviewedBy.
+  if (!VALID_ROLES.includes(role) || !name) {
+    clearRoleSession();
+    return false;
+  }
+
+  currentRole = role;
+  currentUserName = name;
+  return true;
+}
 
 // Opens the role gate overlay at the role-choice step. onVerified runs once,
 // right after a correct password closes the gate - callers decide what
@@ -120,6 +193,10 @@ roleGateSubmitBtn.addEventListener('click', async () => {
     if (res.ok && data.ok) {
       currentRole = pendingRoleChoice;
       currentUserName = name;
+      // Mirrored to sessionStorage here, in the one place the role is
+      // actually verified, so a refresh in this tab can skip the gate -
+      // see the bootstrap at the bottom of this file.
+      saveRoleSession(currentRole, currentUserName);
       applyRoleRestrictions();
       const onVerified = roleGateOnVerified;
       closeRoleGate();
@@ -138,13 +215,15 @@ roleGateSubmitBtn.addEventListener('click', async () => {
   }
 });
 
-// Open the role gate immediately on page load - it's the first thing a
-// visitor sees, before the intake form (hidden by default in the markup -
-// see #intake-form-card) is ever revealed. revealIntakeForm is a plain
-// function declaration further down, safe to reference here since it's
-// hoisted and won't actually run until the user submits a correct
-// password, well after this whole script has finished its initial pass.
-openRoleGate(revealIntakeForm);
+// The page-load decision (gate vs. restore a verified session) lives at
+// the very bottom of this file, in bootstrapRoleGate(). It used to be an
+// unconditional openRoleGate(revealIntakeForm) right here, which was fine
+// only because it merely *passed* revealIntakeForm as a callback to run
+// later. Restoring a session has to actually CALL revealIntakeForm() and
+// applyRoleRestrictions() during that initial pass, and those touch
+// consts declared further down (navItems/viewPanels, intakeFormCard,
+// backToRoleBtn) - reaching them from here would throw on the temporal
+// dead zone, so the decision runs once everything is initialized.
 
 // ============================================================
 // Tab shell: sidebar navigation between the app's views.
@@ -258,7 +337,6 @@ function loadViewData(viewName) {
     renderReports();
   } else if (viewName === 'settings') {
     renderSettings();
-    renderPolicySettings();
   } else if (viewName === 'pending') {
     renderPendingReviews();
   }
@@ -275,10 +353,11 @@ const intakeFormCard = document.getElementById('intake-form-card');
 function revealIntakeForm() {
   intakeFormCard.hidden = false;
   backToRoleBtn.hidden = false;
-  // Which screening policy this case will run against - the form no
-  // longer carries one, the server applies the saved policy (see
-  // renderIntakePolicySummary()).
-  renderIntakePolicySummary();
+  // The saved screening policy this case will run against - the form
+  // doesn't carry it (the server applies the one saved policy - see
+  // renderScreeningPolicyEditor() and its comment further down), this
+  // just builds the editor for it in place.
+  renderScreeningPolicyEditor();
 }
 
 const form = document.getElementById('kyc-form');
@@ -828,10 +907,11 @@ async function maybeCheckForReview(jobId) {
   reviewCheckInFlight = true;
   try {
     // Only a verified Compliance Officer sees the interactive Approve/
-    // Reject card - anyone else (KYC Agent, or no role set, e.g. after a
-    // same-tab refresh resets currentRole) gets a read-only notice
-    // instead. This is a client-side-only check - see server.js's
-    // /api/verify-role comment on what it doesn't protect.
+    // Reject card - anyone else (a KYC Agent, or no role set at all,
+    // e.g. a ?job= resume in a fresh tab that never cleared the gate)
+    // gets a read-only notice instead. This is a client-side-only check
+    // - see server.js's /api/verify-role comment on what it doesn't
+    // protect.
     if (currentRole === 'manager') {
       await loadAndShowReview(jobId);
     } else {
@@ -1729,10 +1809,16 @@ async function renderReports() {
 // what used to be a raw JSON textarea filled in per case on the intake
 // form. server.js owns the storage (Redis, seeded from
 // default-screening-policy.json) and applies it in POST /api/run, so
-// nothing here ever has to send it.
+// nothing here ever has to send it - the editor below only reads/writes
+// it through GET and PUT /api/screening-policy.
 //
-// Read-only in both places for now - the add/remove-row editor lands as
-// a separate change.
+// The editor itself lives directly on New Intake (#intake-policy-editor,
+// inside the same <form> as Application Form, using the same
+// .form-section/.field styling) rather than tucked behind a link to a
+// separate Settings page - see revealIntakeForm() above, which is what
+// calls renderScreeningPolicyEditor(). Editable by either role (KYC
+// Agent or Compliance Officer) - see buildPolicyEditor()'s own comment
+// on why `disabled` is still there but always false.
 // ============================================================
 
 async function fetchScreeningPolicy() {
@@ -1741,89 +1827,595 @@ async function fetchScreeningPolicy() {
   return res.json();
 }
 
-// The note on the intake form saying which policy this case will run
-// against. Deliberately just a summary: the full document lives in
-// Settings, and duplicating it here would bury the actual form.
-async function renderIntakePolicySummary() {
-  const el = document.getElementById('intake-policy-summary');
-  if (!el) return;
+// ------------------------------------------------------------------
+// Editor internals. State lives in these module-level variables (names
+// kept as settingsPolicy* from when this lived in Settings) rather than
+// being threaded through every helper - there's only ever one instance
+// of this editor on the page, the same reasoning behind
+// currentReviewJobId/reviewCanApprove for the review panel elsewhere in
+// this file.
+//
+// settingsPolicyDraft is mutated directly, field by field, by the input
+// handlers below rather than rebuilding the whole form on every
+// keystroke - a full re-render on every input event would drop focus
+// out of whatever field the person is still typing in. Add/remove-row
+// actions are the exception: those DO re-render (just the affected
+// list), since there's no keystroke-in-flight to protect and it's the
+// simplest way to keep row indices correct.
+// ------------------------------------------------------------------
+let settingsPolicyDraft = null;
+let settingsPolicyBaseline = null; // last-saved (or last-loaded) copy - Discard resets to this
+let settingsPolicyDirty = false;
+let settingsPolicySaving = false;
 
-  try {
-    const { policy } = await fetchScreeningPolicy();
-    const name = policy.policy_name || 'Unnamed policy';
-    const version = policy.policy_version ? ` · v${policy.policy_version}` : '';
-    el.textContent = `${name}${version}`;
-  } catch (err) {
-    el.textContent = 'Could not load the screening policy.';
+const RISK_FACTOR_CATEGORY_LABELS = {
+  customer: 'Customer',
+  geography: 'Geography',
+  occupation_industry: 'Occupation / Industry',
+  document_integrity: 'Document Integrity',
+  product_channel: 'Product / Channel',
+};
+
+const DECISION_MATRIX_LABELS = {
+  PROHIBITED_present: 'A PROHIBITED factor is present',
+  HIGH_present: 'A HIGH factor is present',
+  two_or_more_MEDIUM: 'Two or more MEDIUM factors',
+  single_MEDIUM: 'A single MEDIUM factor',
+  all_LOW_or_none: 'All factors LOW, or none present',
+};
+
+// The fixed vocabulary the default policy's risk_factor_catalog already
+// uses. Not enforced server-side (nothing in this policy is - see
+// server.js's PUT /api/screening-policy comment), just what the
+// severity <select> offers. A saved value outside this list (from an
+// older build or an external edit) is added as an extra option instead
+// of being silently coerced to something else, so opening the editor
+// can never quietly change data nobody touched.
+const SEVERITY_LEVELS = ['LOW', 'MEDIUM', 'HIGH', 'PROHIBITED'];
+
+function severityTone(sev) {
+  if (sev === 'LOW') return 'tone-green';
+  if (sev === 'MEDIUM') return 'tone-yellow';
+  if (sev === 'HIGH' || sev === 'PROHIBITED') return 'tone-pink';
+  return 'tone-neutral';
+}
+
+function humanizeKey(key) {
+  return String(key).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function markPolicyDirty() {
+  settingsPolicyDirty = true;
+  updatePolicyEditorFooter();
+}
+
+function updatePolicyEditorFooter() {
+  const statusEl = document.getElementById('policy-editor-status');
+  const saveBtn = document.getElementById('policy-save-btn');
+  const discardBtn = document.getElementById('policy-discard-btn');
+  if (!statusEl || !saveBtn || !discardBtn) return;
+
+  saveBtn.disabled = !settingsPolicyDirty || settingsPolicySaving;
+  discardBtn.disabled = !settingsPolicyDirty || settingsPolicySaving;
+
+  if (settingsPolicySaving) {
+    statusEl.textContent = 'Saving…';
+    statusEl.className = 'policy-editor-status';
+  } else if (settingsPolicyDirty) {
+    statusEl.textContent = 'Unsaved changes';
+    statusEl.className = 'policy-editor-status is-dirty';
+  } else {
+    statusEl.textContent = '';
+    statusEl.className = 'policy-editor-status';
   }
 }
 
-document.getElementById('intake-policy-link')?.addEventListener('click', () => {
-  switchToView('settings');
-});
+// Drops rows/entries that are entirely blank (an add-then-abandon) and
+// trims every string field - run once, on a deep clone, right before
+// Save. Working from a clone means a failed save can't leave the form
+// the person is still looking at silently trimmed/pruned out from under
+// them.
+function cleanedPolicyForSave(policy) {
+  const cleaned = JSON.parse(JSON.stringify(policy));
+  const trim = (v) => (typeof v === 'string' ? v.trim() : v);
 
-async function renderPolicySettings() {
-  const el = document.getElementById('settings-policy');
+  cleaned.policy_name = trim(cleaned.policy_name);
+  cleaned.policy_version = trim(cleaned.policy_version);
+  cleaned.issuing_authority = trim(cleaned.issuing_authority);
+  cleaned.framework_overview = trim(cleaned.framework_overview);
+
+  Object.values(cleaned.risk_categories || {}).forEach((cat) => {
+    cat.description = trim(cat.description);
+    cat.monitoring = trim(cat.monitoring);
+  });
+
+  Object.keys(cleaned.risk_factor_catalog || {}).forEach((catKey) => {
+    cleaned.risk_factor_catalog[catKey] = (cleaned.risk_factor_catalog[catKey] || [])
+      .map((f) => ({
+        factor_id: trim(f.factor_id),
+        name: trim(f.name),
+        severity: f.severity,
+        description: trim(f.description),
+      }))
+      .filter((f) => f.factor_id || f.name || f.description);
+  });
+
+  Object.keys(cleaned.decision_matrix || {}).forEach((key) => {
+    cleaned.decision_matrix[key] = trim(cleaned.decision_matrix[key]);
+  });
+
+  cleaned.edd_requirements_if_referred = (cleaned.edd_requirements_if_referred || [])
+    .map(trim)
+    .filter(Boolean);
+  cleaned.reporting_obligations = (cleaned.reporting_obligations || []).map(trim).filter(Boolean);
+
+  return cleaned;
+}
+
+// Shared builder for every plain label+input/textarea field in the
+// editor. value === undefined/null becomes '' - deliberately not
+// `value || ''`, which would also blank out a legitimate 0 (e.g.
+// Renewal Period (years)).
+function buildLabeledInput({ label, value, type, textarea, rows, disabled, onInput }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+
+  const labelEl = document.createElement('label');
+  labelEl.textContent = label;
+  wrap.appendChild(labelEl);
+
+  const input = document.createElement(textarea ? 'textarea' : 'input');
+  if (!textarea) input.type = type || 'text';
+  if (textarea && rows) input.rows = rows;
+  input.value = value === undefined || value === null ? '' : value;
+  input.disabled = Boolean(disabled);
+  input.addEventListener('input', () => {
+    onInput(input.value);
+    markPolicyDirty();
+  });
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function buildRemoveButton(onClick, ariaLabel) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'row-remove-btn';
+  btn.textContent = '✕';
+  btn.setAttribute('aria-label', ariaLabel || 'Remove');
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+// Rebuilds one category's rows + its "+ Add risk factor" button.
+// `factors` is the live array from settingsPolicyDraft.risk_factor_catalog
+// - add/remove mutate it in place (push/splice) so the draft never falls
+// out of sync with what's on screen.
+function renderFactorCategory(listEl, catKey, factors, disabled) {
+  listEl.innerHTML = '';
+
+  factors.forEach((factor, idx) => {
+    const row = document.createElement('div');
+    row.className = 'factor-row';
+
+    const top = document.createElement('div');
+    top.className = 'factor-row-top';
+
+    const idField = buildLabeledInput({
+      label: 'ID',
+      value: factor.factor_id,
+      disabled,
+      onInput: (v) => { factor.factor_id = v; },
+    });
+    idField.classList.add('factor-field-id');
+
+    const nameField = buildLabeledInput({
+      label: 'Name',
+      value: factor.name,
+      disabled,
+      onInput: (v) => { factor.name = v; },
+    });
+    nameField.classList.add('factor-field-name');
+
+    const sevWrap = document.createElement('div');
+    sevWrap.className = 'field factor-field-severity';
+    const sevLabel = document.createElement('label');
+    sevLabel.textContent = 'Severity';
+    const sevSelect = document.createElement('select');
+    const levels = !factor.severity || SEVERITY_LEVELS.includes(factor.severity)
+      ? SEVERITY_LEVELS
+      : [...SEVERITY_LEVELS, factor.severity];
+    levels.forEach((lvl) => {
+      const opt = document.createElement('option');
+      opt.value = lvl;
+      opt.textContent = lvl;
+      if (factor.severity === lvl) opt.selected = true;
+      sevSelect.appendChild(opt);
+    });
+    sevSelect.disabled = disabled;
+    sevSelect.addEventListener('change', () => {
+      factor.severity = sevSelect.value;
+      markPolicyDirty();
+    });
+    sevWrap.append(sevLabel, sevSelect);
+
+    top.append(idField, nameField, sevWrap);
+
+    if (!disabled) {
+      top.appendChild(buildRemoveButton(() => {
+        factors.splice(idx, 1);
+        renderFactorCategory(listEl, catKey, factors, disabled);
+        markPolicyDirty();
+      }, `Remove ${factor.name || 'risk factor'}`));
+    }
+
+    row.appendChild(top);
+
+    const descField = buildLabeledInput({
+      label: 'Description',
+      value: factor.description,
+      textarea: true,
+      rows: 2,
+      disabled,
+      onInput: (v) => { factor.description = v; },
+    });
+    descField.classList.add('factor-field-description');
+    row.appendChild(descField);
+
+    listEl.appendChild(row);
+  });
+
+  if (!disabled) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'add-row-btn';
+    addBtn.textContent = '+ Add risk factor';
+    addBtn.addEventListener('click', () => {
+      factors.push({ factor_id: '', name: '', severity: 'LOW', description: '' });
+      renderFactorCategory(listEl, catKey, factors, disabled);
+      markPolicyDirty();
+      const rows = listEl.querySelectorAll('.factor-row');
+      rows[rows.length - 1]?.querySelector('input')?.focus();
+    });
+    listEl.appendChild(addBtn);
+  }
+}
+
+// Same add/remove-row pattern as renderFactorCategory, for the two plain
+// string-array sections (EDD requirements, reporting obligations).
+function renderStringList(listEl, items, disabled, placeholder) {
+  listEl.innerHTML = '';
+
+  items.forEach((value, idx) => {
+    const row = document.createElement('div');
+    row.className = 'string-list-row';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value;
+    if (placeholder) input.placeholder = placeholder;
+    input.disabled = disabled;
+    input.addEventListener('input', () => {
+      items[idx] = input.value;
+      markPolicyDirty();
+    });
+    row.appendChild(input);
+
+    if (!disabled) {
+      row.appendChild(buildRemoveButton(() => {
+        items.splice(idx, 1);
+        renderStringList(listEl, items, disabled, placeholder);
+        markPolicyDirty();
+      }, `Remove ${placeholder || 'item'}`));
+    }
+
+    listEl.appendChild(row);
+  });
+
+  if (!disabled) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'add-row-btn';
+    addBtn.textContent = '+ Add';
+    addBtn.addEventListener('click', () => {
+      items.push('');
+      renderStringList(listEl, items, disabled, placeholder);
+      markPolicyDirty();
+      const rows = listEl.querySelectorAll('.string-list-row input');
+      rows[rows.length - 1]?.focus();
+    });
+    listEl.appendChild(addBtn);
+  }
+}
+
+// Builds the full editor into `el` from the current settingsPolicyDraft.
+// Called on initial load and again after Save/Discard, where it's the
+// simplest way to get every field's closures pointed at the right
+// (possibly now-replaced) draft object.
+function buildPolicyEditor(el, updatedAt, updatedBy) {
+  el.innerHTML = '';
+  // Editable by whoever is running the case (KYC Agent or Compliance
+  // Officer) - it used to be a per-case field anyone filled in, and that
+  // stays true here even though it's now one saved document. `disabled`
+  // is kept (rather than ripping the parameter out of every helper
+  // below) as the one place to restore a role restriction later if
+  // that's ever wanted again - see server.js's PUT /api/screening-policy
+  // comment, which already notes there's no server-side check either
+  // way, so this was always UI intent only.
+  const disabled = false;
+  const draft = settingsPolicyDraft;
+
+  // --- Overview ---
+  const overviewSection = document.createElement('div');
+  overviewSection.className = 'form-section';
+  const overviewTitle = document.createElement('h3');
+  overviewTitle.className = 'form-section-title';
+  overviewTitle.textContent = 'Overview';
+  overviewSection.appendChild(overviewTitle);
+
+  const nameVersionRow = document.createElement('div');
+  nameVersionRow.className = 'field-row';
+  nameVersionRow.appendChild(buildLabeledInput({
+    label: 'Policy Name',
+    value: draft.policy_name,
+    disabled,
+    onInput: (v) => { draft.policy_name = v; },
+  }));
+  nameVersionRow.appendChild(buildLabeledInput({
+    label: 'Version',
+    value: draft.policy_version,
+    disabled,
+    onInput: (v) => { draft.policy_version = v; },
+  }));
+  overviewSection.appendChild(nameVersionRow);
+
+  overviewSection.appendChild(buildLabeledInput({
+    label: 'Issuing Authority',
+    value: draft.issuing_authority,
+    disabled,
+    onInput: (v) => { draft.issuing_authority = v; },
+  }));
+  overviewSection.appendChild(buildLabeledInput({
+    label: 'Framework Overview',
+    value: draft.framework_overview,
+    textarea: true,
+    rows: 3,
+    disabled,
+    onInput: (v) => { draft.framework_overview = v; },
+  }));
+  el.appendChild(overviewSection);
+
+  // --- Risk categories (LOW / MEDIUM / HIGH) ---
+  const catSection = document.createElement('div');
+  catSection.className = 'form-section';
+  const catTitle = document.createElement('h3');
+  catTitle.className = 'form-section-title';
+  catTitle.textContent = 'Risk Categories';
+  catSection.appendChild(catTitle);
+
+  const catGrid = document.createElement('div');
+  catGrid.className = 'risk-category-grid';
+  Object.keys(draft.risk_categories || {}).forEach((catKey) => {
+    const cat = draft.risk_categories[catKey];
+    const block = document.createElement('div');
+    block.className = 'risk-category-block';
+
+    const header = document.createElement('div');
+    header.className = 'risk-category-block-header';
+    const badge = document.createElement('span');
+    badge.className = `badge ${severityTone(catKey)}`;
+    badge.textContent = catKey;
+    header.appendChild(badge);
+    block.appendChild(header);
+
+    block.appendChild(buildLabeledInput({
+      label: 'Description',
+      value: cat.description,
+      textarea: true,
+      rows: 2,
+      disabled,
+      onInput: (v) => { cat.description = v; },
+    }));
+    block.appendChild(buildLabeledInput({
+      label: 'Renewal Period (years)',
+      value: cat.renewal_period_years,
+      type: 'number',
+      disabled,
+      onInput: (v) => { cat.renewal_period_years = v === '' ? '' : Number(v); },
+    }));
+    block.appendChild(buildLabeledInput({
+      label: 'Monitoring',
+      value: cat.monitoring,
+      disabled,
+      onInput: (v) => { cat.monitoring = v; },
+    }));
+
+    catGrid.appendChild(block);
+  });
+  catSection.appendChild(catGrid);
+  el.appendChild(catSection);
+
+  // --- Risk factor catalog: the add/remove-row editor itself ---
+  const factorSection = document.createElement('div');
+  factorSection.className = 'form-section';
+  const factorTitle = document.createElement('h3');
+  factorTitle.className = 'form-section-title';
+  factorTitle.textContent = 'Risk Factor Catalog';
+  factorSection.appendChild(factorTitle);
+
+  Object.keys(draft.risk_factor_catalog || {}).forEach((catKey) => {
+    if (!Array.isArray(draft.risk_factor_catalog[catKey])) draft.risk_factor_catalog[catKey] = [];
+
+    const catWrap = document.createElement('div');
+    catWrap.className = 'factor-category';
+    const catHeading = document.createElement('h4');
+    catHeading.className = 'factor-category-title';
+    catHeading.textContent = RISK_FACTOR_CATEGORY_LABELS[catKey] || humanizeKey(catKey);
+    catWrap.appendChild(catHeading);
+
+    const list = document.createElement('div');
+    list.className = 'factor-list';
+    catWrap.appendChild(list);
+    renderFactorCategory(list, catKey, draft.risk_factor_catalog[catKey], disabled);
+
+    factorSection.appendChild(catWrap);
+  });
+  el.appendChild(factorSection);
+
+  // --- Decision matrix ---
+  const matrixSection = document.createElement('div');
+  matrixSection.className = 'form-section';
+  const matrixTitle = document.createElement('h3');
+  matrixTitle.className = 'form-section-title';
+  matrixTitle.textContent = 'Decision Matrix';
+  matrixSection.appendChild(matrixTitle);
+
+  Object.keys(draft.decision_matrix || {}).forEach((key) => {
+    matrixSection.appendChild(buildLabeledInput({
+      label: DECISION_MATRIX_LABELS[key] || humanizeKey(key),
+      value: draft.decision_matrix[key],
+      textarea: true,
+      rows: 2,
+      disabled,
+      onInput: (v) => { draft.decision_matrix[key] = v; },
+    }));
+  });
+  el.appendChild(matrixSection);
+
+  // --- EDD requirements ---
+  const eddSection = document.createElement('div');
+  eddSection.className = 'form-section';
+  const eddTitle = document.createElement('h3');
+  eddTitle.className = 'form-section-title';
+  eddTitle.textContent = 'EDD Requirements if Referred';
+  eddSection.appendChild(eddTitle);
+  if (!Array.isArray(draft.edd_requirements_if_referred)) draft.edd_requirements_if_referred = [];
+  const eddList = document.createElement('div');
+  eddList.className = 'string-list';
+  eddSection.appendChild(eddList);
+  renderStringList(eddList, draft.edd_requirements_if_referred, disabled, 'Requirement');
+  el.appendChild(eddSection);
+
+  // --- Reporting obligations ---
+  const reportSection = document.createElement('div');
+  reportSection.className = 'form-section';
+  const reportTitle = document.createElement('h3');
+  reportTitle.className = 'form-section-title';
+  reportTitle.textContent = 'Reporting Obligations';
+  reportSection.appendChild(reportTitle);
+  if (!Array.isArray(draft.reporting_obligations)) draft.reporting_obligations = [];
+  const reportList = document.createElement('div');
+  reportList.className = 'string-list';
+  reportSection.appendChild(reportList);
+  renderStringList(reportList, draft.reporting_obligations, disabled, 'Obligation');
+  el.appendChild(reportSection);
+
+  // --- Footer: last-updated stamp, and Save/Discard for a Compliance
+  //     Officer only (see the comment at the top of this section) ---
+  const footer = document.createElement('div');
+  footer.className = 'form-section policy-editor-footer';
+
+  const meta = document.createElement('div');
+  meta.className = 'policy-editor-meta';
+  meta.textContent = updatedAt
+    ? `Last updated ${formatTimestamp(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ''}`
+    : 'Using packaged default — not yet saved.';
+  footer.appendChild(meta);
+
+  if (!disabled) {
+    const status = document.createElement('div');
+    status.id = 'policy-editor-status';
+    status.className = 'policy-editor-status';
+    footer.appendChild(status);
+
+    const errorEl = document.createElement('div');
+    errorEl.id = 'policy-editor-error';
+    errorEl.className = 'error-banner';
+    errorEl.hidden = true;
+    footer.appendChild(errorEl);
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'policy-editor-buttons';
+
+    const discardBtn = document.createElement('button');
+    discardBtn.type = 'button';
+    discardBtn.id = 'policy-discard-btn';
+    discardBtn.className = 'btn policy-editor-btn policy-editor-btn--secondary';
+    discardBtn.textContent = 'Discard changes';
+    discardBtn.disabled = true;
+    discardBtn.addEventListener('click', () => {
+      settingsPolicyDraft = JSON.parse(JSON.stringify(settingsPolicyBaseline));
+      settingsPolicyDirty = false;
+      buildPolicyEditor(el, updatedAt, updatedBy);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.id = 'policy-save-btn';
+    saveBtn.className = 'btn btn-primary policy-editor-btn';
+    saveBtn.textContent = 'Save policy';
+    saveBtn.disabled = true;
+    saveBtn.addEventListener('click', async () => {
+      errorEl.hidden = true;
+      const cleaned = cleanedPolicyForSave(settingsPolicyDraft);
+      if (!cleaned.policy_name) {
+        errorEl.textContent = 'Policy Name is required.';
+        errorEl.hidden = false;
+        return;
+      }
+
+      settingsPolicySaving = true;
+      saveBtn.textContent = 'Saving…';
+      updatePolicyEditorFooter();
+
+      try {
+        const res = await fetch('/api/screening-policy', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ policy: cleaned, updatedBy: currentUserName }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save screening policy.');
+
+        settingsPolicyBaseline = cleaned;
+        settingsPolicyDraft = JSON.parse(JSON.stringify(cleaned));
+        settingsPolicyDirty = false;
+        settingsPolicySaving = false;
+        buildPolicyEditor(el, data.updatedAt, data.updatedBy);
+      } catch (err) {
+        settingsPolicySaving = false;
+        saveBtn.textContent = 'Save policy';
+        updatePolicyEditorFooter();
+        errorEl.textContent = err.message || 'Failed to save screening policy.';
+        errorEl.hidden = false;
+      }
+    });
+
+    btnRow.append(discardBtn, saveBtn);
+    footer.appendChild(btnRow);
+  }
+
+  el.appendChild(footer);
+  updatePolicyEditorFooter();
+}
+
+// Called once from revealIntakeForm() (see the section comment above) -
+// New Intake's panel is never torn down and rebuilt on tab-switch (see
+// switchToView()), so there's no equivalent of viewLoaded's once-per-load
+// guard to rely on here; revealIntakeForm() itself already only runs once
+// per role-gate pass, which is enough.
+async function renderScreeningPolicyEditor() {
+  const el = document.getElementById('intake-policy-editor');
   if (!el) return;
   el.textContent = 'Loading…';
 
   try {
     const { policy, updatedAt, updatedBy } = await fetchScreeningPolicy();
-    el.innerHTML = '';
-
-    const catalog = policy.risk_factor_catalog || {};
-    const factorCount = Object.values(catalog).reduce(
-      (sum, list) => sum + (Array.isArray(list) ? list.length : 0),
-      0
-    );
-
-    const grid = document.createElement('div');
-    grid.className = 'settings-grid';
-    [
-      { label: 'Policy Name', value: policy.policy_name || '—' },
-      { label: 'Version', value: policy.policy_version || '—' },
-      { label: 'Issuing Authority', value: policy.issuing_authority || '—' },
-      { label: 'Risk Factors', value: `${factorCount} across ${Object.keys(catalog).length} categories` },
-      // Both null while the packaged default is still in force - nobody
-      // has saved over it yet.
-      {
-        label: 'Last Updated',
-        value: updatedAt ? `${formatTimestamp(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ''}` : 'Using packaged default',
-      },
-    ].forEach((row) => {
-      const rowEl = document.createElement('div');
-      rowEl.className = 'settings-row';
-      const label = document.createElement('div');
-      label.className = 'settings-row-label';
-      label.textContent = row.label;
-      const value = document.createElement('div');
-      value.className = 'settings-row-value';
-      value.textContent = row.value;
-      rowEl.appendChild(label);
-      rowEl.appendChild(value);
-      grid.appendChild(rowEl);
-    });
-    el.appendChild(grid);
-
-    if (policy.framework_overview) {
-      const overview = document.createElement('p');
-      overview.className = 'policy-overview';
-      overview.textContent = policy.framework_overview;
-      el.appendChild(overview);
-    }
-
-    // Same collapsible raw-JSON escape hatch the review card and Case
-    // Detail already use - until the editor exists, this is the only way
-    // to read the full document, and it stays useful afterwards.
-    const details = document.createElement('details');
-    details.className = 'case-file-json';
-    const summary = document.createElement('summary');
-    summary.textContent = 'View full policy (JSON)';
-    const pre = document.createElement('pre');
-    pre.textContent = JSON.stringify(policy, null, 2);
-    details.appendChild(summary);
-    details.appendChild(pre);
-    el.appendChild(details);
+    settingsPolicyBaseline = policy;
+    settingsPolicyDraft = JSON.parse(JSON.stringify(policy));
+    settingsPolicyDirty = false;
+    settingsPolicySaving = false;
+    buildPolicyEditor(el, updatedAt, updatedBy);
   } catch (err) {
     el.textContent = 'Could not load the screening policy.';
   }
@@ -1890,6 +2482,10 @@ function backToRoleSelection() {
   stopPolling();
   currentRole = null;
   currentUserName = null;
+  // Dropped alongside the in-memory values, so "Back" really does force
+  // re-verification rather than the next refresh silently restoring the
+  // role that was just stepped out of.
+  clearRoleSession();
   applyRoleRestrictions();
   setBusy(false);
   intakeFormCard.hidden = true;
@@ -1904,6 +2500,24 @@ function backToRoleSelection() {
 }
 
 backToRoleBtn.addEventListener('click', backToRoleSelection);
+
+// The page-load role decision (see the note where openRoleGate() used to
+// be called, near the top). Runs before resumeJobFromUrl() below to keep
+// the original ordering: decide the role first, then pick a job back up.
+//
+// A restored session takes exactly the same two steps the verify-success
+// branch takes - applyRoleRestrictions() then revealIntakeForm() - rather
+// than reimplementing what "being verified" means. The landing view is
+// deliberately still shown either way; this only skips the gate, not the
+// app's front door.
+(function bootstrapRoleGate() {
+  if (restoreRoleSession()) {
+    applyRoleRestrictions();
+    revealIntakeForm();
+  } else {
+    openRoleGate(revealIntakeForm);
+  }
+})();
 
 // Resume watching an in-flight job after a same-tab refresh, if the URL
 // still carries a ?job= param from before the reload. Skips straight past

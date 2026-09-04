@@ -179,8 +179,9 @@ app.get('/api/screening-policy', async (req, res) => {
 
 // Like every other route here, this has no server-side role check - see
 // /api/verify-role's comment on what the client-side gate does and
-// doesn't protect. Settings hides the Save button from a KYC Agent, but
-// that's UI intent, not enforcement.
+// doesn't protect. The New Intake editor (public/app.js,
+// buildPolicyEditor()) lets either role save - there's no UI-side
+// restriction here either, by design.
 app.put('/api/screening-policy', async (req, res) => {
   try {
     const { policy, updatedBy } = req.body || {};

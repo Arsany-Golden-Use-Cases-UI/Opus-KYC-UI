@@ -368,19 +368,22 @@
                 </div>
               </div>
 
-              <!-- Screening Policy is no longer entered per case. One saved
-                   policy (Settings -> Screening policy) applies to every
-                   submission and is pulled server-side in POST /api/run, so
-                   this is just a read-only note of which policy will apply -
-                   visible without leaving the form. Switching to Settings and
-                   back is safe: switchToView() only toggles panel `hidden`,
-                   so a half-filled form above survives the round trip. -->
-              <div class="field">
-                <label>Screening Policy</label>
-                <div class="policy-summary">
-                  <div id="intake-policy-summary" class="policy-summary-text">Loading…</div>
-                  <button type="button" id="intake-policy-link" class="btn btn-secondary policy-summary-btn">View or edit in Settings</button>
-                </div>
+              <!-- Screening Policy is one saved document, not entered per
+                   case - it's still pulled server-side in POST /api/run,
+                   exactly as before. It's edited right here instead of on a
+                   separate Settings page so it isn't buried behind a "View
+                   or edit" link, using the same sectioned-fields treatment
+                   as Application Form above. renderScreeningPolicyEditor()
+                   / buildPolicyEditor() (app.js) build everything below
+                   into #intake-policy-editor from the saved policy.
+                   Editable by either role (KYC Agent or Compliance
+                   Officer) - see buildPolicyEditor()'s comment. Switching
+                   tabs and back is safe: switchToView() only toggles
+                   panel `hidden`, so in-progress edits here survive the
+                   round trip same as the rest of this form. -->
+              <div class="form-section">
+                <h3 class="form-section-title">Screening Policy</h3>
+                <div id="intake-policy-editor">Loading…</div>
               </div>
 
               <div id="form-error" class="error-banner" hidden></div>
@@ -621,15 +624,6 @@
           <div class="card">
             <h3 class="settings-card-title">Workflow connection</h3>
             <div id="settings-connection" class="settings-grid"></div>
-          </div>
-
-          <!-- Read-only for now: this lands with the storage/wiring change,
-               and the add/remove-row editor replaces this display in the
-               follow-up. -->
-          <div class="card">
-            <h3 class="settings-card-title">Screening policy</h3>
-            <p class="subtitle">Applied to every case submitted from this console.</p>
-            <div id="settings-policy"></div>
           </div>
         </section>
 
