@@ -58,6 +58,10 @@ const OUTPUT_VARS = {
 // node's Outputs tab before assuming the bug is elsewhere. These are the
 // output_data keys the off-platform callback (API reference section 9.2)
 // expects on the POST to callback.url.
+//
+// BOTH IDS CONFIRMED STILL CORRECT 2026-09-02 against a live dispatch's
+// expected_output_schema, which declared exactly these two keys (as
+// display_name "Can Approve ?" and "comments" respectively).
 const REVIEW_OUTPUT_VARS = {
   canApprove: process.env.OPUS_REVIEW_OUTPUT_CAN_APPROVE || 'workflow_output_d43knd8rq', // True/False
   comments: process.env.OPUS_REVIEW_OUTPUT_COMMENTS || 'workflow_output_m7r06wbko', // Text
@@ -563,16 +567,26 @@ async function fetchInputLabels() {
 //   The token is single-use - a second submission for the same dispatch
 //   gets 401 from Opus.
 //
-// UNVERIFIED AGAINST A LIVE DISPATCH as of 2026-08-27 (this sandbox has no
-// network path to operator.opus.com, and the Opus node hasn't been
-// switched to off-platform yet) - the exact shape of expected_output_schema
-// (in particular, the "type" object to echo back per field) is inferred
-// from the API reference's one worked example (a "float" field) rather
-// than a real KYC dispatch. The full raw payload is logged on first
-// receipt specifically so this can be corrected against reality fast if
-// the shape differs. NOTE: this requires a public URL - Opus's servers
-// cannot reach a local dev server, so exchange 1 only works against the
-// deployed (Vercel) instance, never localhost.
+// CONFIRMED AGAINST A LIVE DISPATCH 2026-09-02 (replacing an earlier
+// "unverified, inferred from the API reference's one worked example" note
+// here). What a real dispatch actually sends:
+//
+//   expected_output_schema is a FLAT map, keyed directly by output
+//   variable id - no wrapping "schema" key to drill through:
+//     { "workflow_output_d43knd8rq": { type: "bool", display_name:
+//         "Can Approve ?", variable_name: "...", description: "...",
+//         is_nullable: false }, ... }
+//
+//   Its per-field `type` is a BARE STRING ("bool"/"str"), which is NOT
+//   the shape the callback wants back - see typeFor() in POST
+//   /api/run/:id/review for the re-wrap and why.
+//
+//   inputs follows the same bare-string convention ({type: "str"|"file",
+//   value: ...}), keyed by the human-task node's own input variable ids.
+//
+// NOTE: this requires a public URL - Opus's servers cannot reach a local
+// dev server, so exchange 1 only works against the deployed (Vercel)
+// instance, never localhost.
 // ---------------------------------------------------------------------
 
 // jobId (== the dispatch's execution_id) -> the stored dispatch, until this
@@ -589,10 +603,14 @@ app.post('/api/opus-webhook/human-review', async (req, res) => {
   const { execution_id: jobId, callback, inputs, expected_output_schema: expectedOutputSchema } = body;
 
   console.log(`[hitl-dispatch] received for jobId=${jobId}`);
-  // Full raw dump on first receipt - this is the one live look we get at
-  // expected_output_schema's real shape (see UNVERIFIED note above). Keep
-  // this until that's confirmed once.
-  console.log('[hitl-dispatch] raw payload:', JSON.stringify(body));
+  // Was a full JSON.stringify(body) dump, kept only until
+  // expected_output_schema's real shape had been seen once - now confirmed
+  // (see the note above), so this logs just the parts worth watching for
+  // future drift. Deliberately NOT the whole body: that wrote
+  // callback.token (a single-use credential) into the logs in plaintext,
+  // alongside several KB of summary prose per dispatch.
+  console.log('[hitl-dispatch] expected_output_schema:', JSON.stringify(expectedOutputSchema || {}));
+  console.log('[hitl-dispatch] input keys:', Object.keys(inputs || {}).join(', '));
   console.log('[hitl-dispatch] currentJobId at receipt:', currentJobId);
 
   if (!jobId || !callback || !callback.url || !callback.token) {
@@ -667,28 +685,43 @@ app.post('/api/run/:id/review', async (req, res) => {
 
     const { callback, expectedOutputSchema } = dispatch;
 
-    // Echo back whatever "type" descriptor Opus itself declared for each
-    // field in expected_output_schema, rather than hardcoding one - the
-    // API reference only shows one worked example (a "float" field) and
-    // explicitly wraps every value as {value, type}, never bare. Falls
-    // back to a sensible guess only if a field is unexpectedly absent from
-    // the schema (logged loudly - that would mean our two hardcoded
-    // REVIEW_OUTPUT_VARS ids no longer match this dispatch's actual schema).
-    function typeFor(varId, fallback) {
+    // Takes the type NAME the dispatch declared for each field and wraps it
+    // in the nested form the callback body needs. The two are deliberately
+    // different shapes, CONFIRMED LIVE 2026-09-02 from a real dispatch:
+    //
+    //   dispatch expected_output_schema[varId].type  ->  "bool" (bare string)
+    //   callback output_data[varId].type             ->  {type: "bool", type_definition: null}
+    //
+    // API reference section 3.4 is emphatic that the off-platform callback
+    // uses the nested object convention and that carrying the bare-string
+    // convention over from /job/execute is a real, separately-proven
+    // failure - so the declared name is re-wrapped here rather than echoed
+    // straight through. An already-nested value (should Opus ever go back
+    // to sending one) passes through untouched. Falls back to a sensible
+    // guess only if a field is missing from the schema entirely - logged
+    // loudly, since that would mean our two hardcoded REVIEW_OUTPUT_VARS
+    // ids no longer match this dispatch's actual schema.
+    function typeFor(varId, fallbackTypeName) {
       const declared = expectedOutputSchema && expectedOutputSchema[varId];
-      if (declared && declared.type) return declared.type;
-      console.warn(`[hitl-callback] jobId=${jobId} no schema entry for ${varId} - using fallback type`, fallback);
-      return fallback;
+      const declaredType = declared && declared.type;
+
+      if (declaredType && typeof declaredType === 'object') return declaredType;
+      if (typeof declaredType === 'string' && declaredType) {
+        return { type: declaredType, type_definition: null };
+      }
+
+      console.warn(`[hitl-callback] jobId=${jobId} no schema entry for ${varId} - using fallback type`, fallbackTypeName);
+      return { type: fallbackTypeName, type_definition: null };
     }
 
     const outputData = {
       [REVIEW_OUTPUT_VARS.canApprove]: {
         value: canApprove,
-        type: typeFor(REVIEW_OUTPUT_VARS.canApprove, { type: 'bool', type_definition: null }),
+        type: typeFor(REVIEW_OUTPUT_VARS.canApprove, 'bool'),
       },
       [REVIEW_OUTPUT_VARS.comments]: {
         value: comments || '',
-        type: typeFor(REVIEW_OUTPUT_VARS.comments, { type: 'str', type_definition: null }),
+        type: typeFor(REVIEW_OUTPUT_VARS.comments, 'str'),
       },
     };
 
