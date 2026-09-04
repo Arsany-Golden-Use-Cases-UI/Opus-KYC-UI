@@ -368,11 +368,21 @@ img {
   min-height: 100vh;
 }
 
+/* position: sticky (not fixed) so it stays part of .app-shell's flex
+   flow for width/sizing, but pins to the viewport instead of scrolling
+   away with .app-main's content - which now runs well past one screen on
+   pages like New Intake. overflow-y: auto is a safeguard for a future
+   nav with enough items to exceed the viewport height itself, not
+   something the current five items trigger. */
 .app-sidebar {
   flex-shrink: 0;
   width: 216px;
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   /* Brand purple instead of the reference's navy - ties the shell back to
      the existing AppliedAI/Opus palette rather than borrowing their color. */
   background: var(--color-heading);
