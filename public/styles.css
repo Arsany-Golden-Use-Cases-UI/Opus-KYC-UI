@@ -803,6 +803,19 @@ input:focus {
   margin-top: 1.25rem;
 }
 
+/* .btn is a block/full-width <button> look by default; this is a plain
+   <a href="mailto:..."> in Settings (see .settings-support-btn's own
+   comment in index.html) - inline-block/auto-width like
+   .policy-editor-btn above, plus the anchor-specific resets .btn's
+   button-based rules don't cover. */
+.settings-support-btn {
+  display: inline-block;
+  width: auto;
+  margin-top: 0.5rem;
+  text-decoration: none;
+  text-align: center;
+}
+
 .btn-caption {
   margin: 0.6rem 0 0;
   font-size: 0.8rem;
