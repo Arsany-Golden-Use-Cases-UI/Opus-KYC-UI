@@ -113,6 +113,94 @@ async function saveHistory(entries) {
   }
 }
 
+// ---------------------------------------------------------------------
+// Screening policy (ADDED 2026-09-04)
+//
+// One saved policy document, edited in Settings and applied to every
+// case - replacing what used to be a raw JSON textarea filled in per
+// case on the intake form. Same Redis-backed pattern as case history
+// above: its own key, the same string-or-object read guard.
+//
+// Seeded from default-screening-policy.json, which is not invented
+// placeholder content - it's the real CBUAE framework read straight out
+// of the workflow's own Input node default (GET /workflow/{id} ->
+// nodes[input].input_schema.schema.workflow_input_x9wtpmxp3.default,
+// captured 2026-09-04). Returned on a miss WITHOUT writing, so a read
+// never mutates the store, and POST /api/run below still sends the
+// correct full policy for cases submitted before anyone opens Settings.
+// ---------------------------------------------------------------------
+
+const SCREENING_POLICY_KEY = 'screening-policy';
+const DEFAULT_SCREENING_POLICY = require('./default-screening-policy.json');
+
+// updatedAt/updatedBy are an audit stamp in the same spirit as a case's
+// ranBy/reviewedBy - both null while the default is still in force, since
+// nobody has saved anything yet.
+function defaultPolicyRecord() {
+  return { policy: DEFAULT_SCREENING_POLICY, updatedAt: null, updatedBy: null };
+}
+
+async function loadScreeningPolicy() {
+  try {
+    const raw = await redis.get(SCREENING_POLICY_KEY);
+    if (!raw) return defaultPolicyRecord();
+
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!parsed || typeof parsed !== 'object' || !parsed.policy) return defaultPolicyRecord();
+
+    return {
+      policy: parsed.policy,
+      updatedAt: parsed.updatedAt || null,
+      updatedBy: parsed.updatedBy || null,
+    };
+  } catch (err) {
+    console.error('screening policy read error', err);
+    return defaultPolicyRecord();
+  }
+}
+
+// Deliberately NOT swallowing errors the way saveHistory() does above:
+// that one is best-effort logging nobody is waiting on, whereas this is a
+// user's explicit save, and silently losing their edits while the UI says
+// "saved" would be worse than surfacing the failure.
+async function saveScreeningPolicy(policy, updatedBy) {
+  const record = {
+    policy,
+    updatedAt: new Date().toISOString(),
+    updatedBy: updatedBy || null,
+  };
+  await redis.set(SCREENING_POLICY_KEY, JSON.stringify(record));
+  return record;
+}
+
+app.get('/api/screening-policy', async (req, res) => {
+  res.json(await loadScreeningPolicy());
+});
+
+// Like every other route here, this has no server-side role check - see
+// /api/verify-role's comment on what the client-side gate does and
+// doesn't protect. Settings hides the Save button from a KYC Agent, but
+// that's UI intent, not enforcement.
+app.put('/api/screening-policy', async (req, res) => {
+  try {
+    const { policy, updatedBy } = req.body || {};
+
+    // Only checked far enough to keep reads sane. The policy's own shape
+    // is deliberately not validated here - it will keep evolving, and a
+    // strict validator would just become a second schema to keep in sync
+    // with the editor.
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+      return res.status(400).json({ error: 'policy must be an object.' });
+    }
+
+    const record = await saveScreeningPolicy(policy, updatedBy);
+    res.json({ ok: true, updatedAt: record.updatedAt, updatedBy: record.updatedBy });
+  } catch (err) {
+    console.error('screening policy write error', err);
+    res.status(500).json({ error: err.message || 'Failed to save screening policy.' });
+  }
+});
+
 // Best-effort applicant name extraction from the raw Application Form JSON
 // string the client sent - shape varies by test data, so this tries a few
 // likely paths rather than assuming one schema, and never throws.
@@ -278,23 +366,28 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
 app.post('/api/run', async (req, res) => {
   try {
-    const { idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, screeningPolicy, title, ranBy } = req.body;
+    // No screeningPolicy here on purpose - it's no longer sent per case,
+    // it's loaded from the saved policy below.
+    const { idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, title, ranBy } = req.body;
 
     if (!idDocumentFileUrl) return res.status(400).json({ error: 'ID Document file is required.' });
     if (!proofOfAddressFileUrl) return res.status(400).json({ error: 'Proof of Address file is required.' });
     if (!applicationFormJson) return res.status(400).json({ error: 'Application Form JSON is required.' });
-    if (!screeningPolicy) return res.status(400).json({ error: 'Screening Policy is required.' });
 
-    for (const [label, raw] of [
-      ['Application Form JSON', applicationFormJson],
-      ['Screening Policy', screeningPolicy],
-    ]) {
-      try {
-        JSON.parse(raw);
-      } catch {
-        return res.status(400).json({ error: `${label} is not valid JSON.` });
-      }
+    // Still validated server-side even though the client now builds this
+    // string itself (buildApplicationFormJson() in app.js) rather than
+    // accepting typed JSON - anything can POST here.
+    try {
+      JSON.parse(applicationFormJson);
+    } catch {
+      return res.status(400).json({ error: 'Application Form JSON is not valid JSON.' });
     }
+
+    // Applied from the one saved policy rather than the request body (it
+    // used to be a per-case textarea on the intake form) - see the
+    // screening-policy section above. Falls back to the packaged default
+    // when nothing has been saved yet, so this is never empty.
+    const { policy: screeningPolicy } = await loadScreeningPolicy();
 
     const initRes = await opusFetch('/job/initiate', {
       method: 'POST',
@@ -315,7 +408,9 @@ app.post('/api/run', async (req, res) => {
       [INPUT_VARS.idDocument]: { value: idDocumentFileUrl, type: 'file' },
       [INPUT_VARS.proofOfAddress]: { value: proofOfAddressFileUrl, type: 'file' },
       [INPUT_VARS.applicationFormJson]: { value: applicationFormJson, type: 'json_string' },
-      [INPUT_VARS.screeningPolicy]: { value: screeningPolicy, type: 'json_string' },
+      // Stored as an object, so re-serialized here - the wire value has to
+      // stay a JSON string for the json_string type.
+      [INPUT_VARS.screeningPolicy]: { value: JSON.stringify(screeningPolicy), type: 'json_string' },
     };
 
     await opusFetch('/job/execute', {

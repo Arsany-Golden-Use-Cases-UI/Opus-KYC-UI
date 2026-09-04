@@ -1,0 +1,167 @@
+{
+  "policy_name": "CBUAE Retail KYC Risk Framework",
+  "policy_version": "2026.05.01",
+  "issuing_authority": "Internal — aligned to CBUAE AML/CFT Regulations for Banks and FATF Recommendation 10",
+  "framework_overview": "Risk-based approach (RBA) classifying retail customers into Low, Medium, or High risk based on customer, geography, product, and channel risk factors. High-risk customers require Enhanced Due Diligence (EDD) and senior compliance officer sign-off before onboarding.",
+  "risk_categories": {
+    "LOW": {
+      "description": "Standard customer due diligence sufficient. Auto-approve eligible if all gates pass.",
+      "renewal_period_years": 5,
+      "monitoring": "Standard transaction monitoring"
+    },
+    "MEDIUM": {
+      "description": "Standard CDD plus mandatory compliance officer review. May require additional documentation.",
+      "renewal_period_years": 3,
+      "monitoring": "Enhanced transaction monitoring on first 6 months"
+    },
+    "HIGH": {
+      "description": "Enhanced Due Diligence (EDD) mandatory. Senior compliance officer sign-off required. Source of funds/wealth documentation mandatory.",
+      "renewal_period_years": 1,
+      "monitoring": "Continuous enhanced monitoring; quarterly review"
+    }
+  },
+  "risk_factor_catalog": {
+    "customer": [
+      {
+        "factor_id": "CUST-001",
+        "name": "Politically Exposed Person (PEP)",
+        "severity": "HIGH",
+        "description": "Customer is, or is closely associated with, a domestic PEP, foreign PEP, or international organisation PEP per CBUAE definitions."
+      },
+      {
+        "factor_id": "CUST-002",
+        "name": "Undisclosed PEP status",
+        "severity": "HIGH",
+        "description": "Customer failed to self-declare PEP status that is confirmed by external screening. Material misrepresentation."
+      },
+      {
+        "factor_id": "CUST-003",
+        "name": "Adverse media — financial crime",
+        "severity": "HIGH",
+        "description": "Credible adverse media linking customer to money laundering, fraud, corruption, or terrorist financing."
+      },
+      {
+        "factor_id": "CUST-004",
+        "name": "Adverse media — non-financial serious crime",
+        "severity": "MEDIUM",
+        "description": "Credible adverse media linking customer to serious non-financial crime."
+      },
+      {
+        "factor_id": "CUST-005",
+        "name": "Sanctions match — confirmed",
+        "severity": "PROHIBITED",
+        "description": "Customer is a confirmed match against UN, OFAC, EU, UK HMT, or UAE consolidated sanctions lists. Onboarding prohibited; mandatory STR filing."
+      },
+      {
+        "factor_id": "CUST-006",
+        "name": "Sanctions match — possible but not confirmed",
+        "severity": "HIGH",
+        "description": "Plausible match on sanctions lists pending disambiguation. Hold and EDD."
+      }
+    ],
+    "geography": [
+      {
+        "factor_id": "GEO-001",
+        "name": "FATF black-list jurisdiction",
+        "severity": "PROHIBITED",
+        "description": "Nationality, residency, or material source-country is a FATF-listed High-Risk Jurisdiction subject to a Call for Action (DPRK, Iran)."
+      },
+      {
+        "factor_id": "GEO-002",
+        "name": "FATF grey-list jurisdiction",
+        "severity": "HIGH",
+        "description": "Nationality, residency, or material source-country is on the FATF list of Jurisdictions under Increased Monitoring."
+      },
+      {
+        "factor_id": "GEO-003",
+        "name": "Sanctioned jurisdiction nexus",
+        "severity": "HIGH",
+        "description": "Material connection to a comprehensively sanctioned jurisdiction (e.g. Russia, Syria, certain regions). Includes nationality and primary source of funds."
+      },
+      {
+        "factor_id": "GEO-004",
+        "name": "Standard low-risk jurisdiction",
+        "severity": "LOW",
+        "description": "Nationality and source-country are FATF-compliant low-risk jurisdictions."
+      }
+    ],
+    "occupation_industry": [
+      {
+        "factor_id": "OCC-001",
+        "name": "Cash-intensive business",
+        "severity": "MEDIUM",
+        "description": "Customer occupation/industry typically involves high cash volumes (e.g. money exchange, jewellery trade, used car dealer)."
+      },
+      {
+        "factor_id": "OCC-002",
+        "name": "Virtual asset / crypto trader",
+        "severity": "MEDIUM",
+        "description": "Self-declared crypto trader, VASP operator, or material income from virtual assets."
+      },
+      {
+        "factor_id": "OCC-003",
+        "name": "Standard salaried occupation",
+        "severity": "LOW",
+        "description": "Salaried employment with verifiable employer; standard low-risk occupation."
+      },
+      {
+        "factor_id": "OCC-004",
+        "name": "Independent investor / trader with no verifiable employer",
+        "severity": "MEDIUM",
+        "description": "Self-employed in financial markets without verifiable counterparty or institutional record."
+      }
+    ],
+    "document_integrity": [
+      {
+        "factor_id": "DOC-001",
+        "name": "Identity document mismatch",
+        "severity": "HIGH",
+        "description": "Name, DOB, or nationality differs materially between the application form, ID document, and proof of address."
+      },
+      {
+        "factor_id": "DOC-002",
+        "name": "Minor transliteration variation",
+        "severity": "LOW",
+        "description": "Spelling variation explainable by Arabic-to-English transliteration (e.g. Mohammed / Mohammad) and other identifiers align."
+      },
+      {
+        "factor_id": "DOC-003",
+        "name": "Address mismatch on PoA",
+        "severity": "MEDIUM",
+        "description": "Proof of address lists a different address than the application form. Requires updated PoA or reconciliation."
+      }
+    ],
+    "product_channel": [
+      {
+        "factor_id": "PRD-001",
+        "name": "Standard retail current account",
+        "severity": "LOW",
+        "description": "Standard retail product through standard channel."
+      },
+      {
+        "factor_id": "PRD-002",
+        "name": "Wealth onboarding tier",
+        "severity": "MEDIUM",
+        "description": "Customer onboarded into private banking / wealth tier — EDD threshold lower."
+      }
+    ]
+  },
+  "decision_matrix": {
+    "PROHIBITED_present": "Any single PROHIBITED factor → REJECT (e.g. confirmed sanctions match, FATF black-list nationality).",
+    "HIGH_present": "Any single HIGH factor → REFER to compliance for EDD (e.g. PEP, possible sanctions, sanctioned jurisdiction nexus, identity mismatch).",
+    "two_or_more_MEDIUM": "Two or more MEDIUM factors → REFER to compliance.",
+    "single_MEDIUM": "Single MEDIUM factor → REFER unless mitigated; medium-risk classification.",
+    "all_LOW_or_none": "All factors LOW or absent → APPROVE under standard CDD."
+  },
+  "edd_requirements_if_referred": [
+    "Documented source of funds and source of wealth (last 12 months bank statements, salary certificates, business contracts)",
+    "Senior compliance officer sign-off",
+    "Enhanced transaction monitoring on first 6 months",
+    "Documented rationale recorded in case file"
+  ],
+  "reporting_obligations": [
+    "Confirmed sanctions match → STR filed with UAE FIU within 24 hours and customer not onboarded.",
+    "Confirmed PEP → recorded in PEP register; quarterly review.",
+    "Adverse media — financial crime → recorded in case file; review by senior compliance officer."
+  ]
+}

@@ -258,6 +258,7 @@ function loadViewData(viewName) {
     renderReports();
   } else if (viewName === 'settings') {
     renderSettings();
+    renderPolicySettings();
   } else if (viewName === 'pending') {
     renderPendingReviews();
   }
@@ -274,6 +275,10 @@ const intakeFormCard = document.getElementById('intake-form-card');
 function revealIntakeForm() {
   intakeFormCard.hidden = false;
   backToRoleBtn.hidden = false;
+  // Which screening policy this case will run against - the form no
+  // longer carries one, the server applies the saved policy (see
+  // renderIntakePolicySummary()).
+  renderIntakePolicySummary();
 }
 
 const form = document.getElementById('kyc-form');
@@ -601,7 +606,6 @@ form.addEventListener('submit', async (e) => {
   const idDocumentFile = document.getElementById('id-document').files[0];
   const proofOfAddressFile = document.getElementById('proof-of-address').files[0];
   const applicationFormJson = buildApplicationFormJson();
-  const screeningPolicy = document.getElementById('screening-policy').value.trim();
 
   if (!idDocumentFile || !proofOfAddressFile) {
     showError('Please attach both the ID Document and Proof of Address files.');
@@ -615,18 +619,11 @@ form.addEventListener('submit', async (e) => {
     showError('Proof of Address must be 10MB or smaller.');
     return;
   }
-  // No JSON.parse check for applicationFormJson anymore -
-  // buildApplicationFormJson() constructs and serializes it, so malformed
-  // JSON is no longer reachable. Screening Policy is still a raw textarea,
-  // so it still needs validating.
-  try {
-    JSON.parse(screeningPolicy);
-  } catch {
-    showError('Screening Policy is not valid JSON.');
-    return;
-  }
-
-  const runArgs = { idDocumentFile, proofOfAddressFile, applicationFormJson, screeningPolicy };
+  // Nothing left to JSON-validate here: buildApplicationFormJson()
+  // constructs and serializes the application form (so malformed JSON is
+  // unreachable), and the screening policy is no longer typed per case -
+  // the server loads the saved one.
+  const runArgs = { idDocumentFile, proofOfAddressFile, applicationFormJson };
 
   // No role check here anymore - the role gate now runs at page load
   // (before the intake form is even revealed), so by the time this button
@@ -638,7 +635,7 @@ form.addEventListener('submit', async (e) => {
 // just extracted into its own function so it can run either immediately
 // (role already verified this session) or as the openRoleGate() callback
 // once a password is confirmed.
-async function startRun({ idDocumentFile, proofOfAddressFile, applicationFormJson, screeningPolicy }) {
+async function startRun({ idDocumentFile, proofOfAddressFile, applicationFormJson }) {
   setBusy(true);
   resultsPanel.hidden = true;
   errorPanel.hidden = true;
@@ -658,7 +655,7 @@ async function startRun({ idDocumentFile, proofOfAddressFile, applicationFormJso
     const runRes = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, screeningPolicy, ranBy: currentUserName }),
+      body: JSON.stringify({ idDocumentFileUrl, proofOfAddressFileUrl, applicationFormJson, ranBy: currentUserName }),
     });
     const runData = await runRes.json();
     if (!runRes.ok) throw new Error(runData.error || 'Failed to start job.');
@@ -1725,6 +1722,111 @@ async function renderReports() {
 
     breakdownsEl.appendChild(blockEl);
   });
+}
+
+// ============================================================
+// Screening policy: one saved document applied to every case, replacing
+// what used to be a raw JSON textarea filled in per case on the intake
+// form. server.js owns the storage (Redis, seeded from
+// default-screening-policy.json) and applies it in POST /api/run, so
+// nothing here ever has to send it.
+//
+// Read-only in both places for now - the add/remove-row editor lands as
+// a separate change.
+// ============================================================
+
+async function fetchScreeningPolicy() {
+  const res = await fetch('/api/screening-policy');
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+
+// The note on the intake form saying which policy this case will run
+// against. Deliberately just a summary: the full document lives in
+// Settings, and duplicating it here would bury the actual form.
+async function renderIntakePolicySummary() {
+  const el = document.getElementById('intake-policy-summary');
+  if (!el) return;
+
+  try {
+    const { policy } = await fetchScreeningPolicy();
+    const name = policy.policy_name || 'Unnamed policy';
+    const version = policy.policy_version ? ` · v${policy.policy_version}` : '';
+    el.textContent = `${name}${version}`;
+  } catch (err) {
+    el.textContent = 'Could not load the screening policy.';
+  }
+}
+
+document.getElementById('intake-policy-link')?.addEventListener('click', () => {
+  switchToView('settings');
+});
+
+async function renderPolicySettings() {
+  const el = document.getElementById('settings-policy');
+  if (!el) return;
+  el.textContent = 'Loading…';
+
+  try {
+    const { policy, updatedAt, updatedBy } = await fetchScreeningPolicy();
+    el.innerHTML = '';
+
+    const catalog = policy.risk_factor_catalog || {};
+    const factorCount = Object.values(catalog).reduce(
+      (sum, list) => sum + (Array.isArray(list) ? list.length : 0),
+      0
+    );
+
+    const grid = document.createElement('div');
+    grid.className = 'settings-grid';
+    [
+      { label: 'Policy Name', value: policy.policy_name || '—' },
+      { label: 'Version', value: policy.policy_version || '—' },
+      { label: 'Issuing Authority', value: policy.issuing_authority || '—' },
+      { label: 'Risk Factors', value: `${factorCount} across ${Object.keys(catalog).length} categories` },
+      // Both null while the packaged default is still in force - nobody
+      // has saved over it yet.
+      {
+        label: 'Last Updated',
+        value: updatedAt ? `${formatTimestamp(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ''}` : 'Using packaged default',
+      },
+    ].forEach((row) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'settings-row';
+      const label = document.createElement('div');
+      label.className = 'settings-row-label';
+      label.textContent = row.label;
+      const value = document.createElement('div');
+      value.className = 'settings-row-value';
+      value.textContent = row.value;
+      rowEl.appendChild(label);
+      rowEl.appendChild(value);
+      grid.appendChild(rowEl);
+    });
+    el.appendChild(grid);
+
+    if (policy.framework_overview) {
+      const overview = document.createElement('p');
+      overview.className = 'policy-overview';
+      overview.textContent = policy.framework_overview;
+      el.appendChild(overview);
+    }
+
+    // Same collapsible raw-JSON escape hatch the review card and Case
+    // Detail already use - until the editor exists, this is the only way
+    // to read the full document, and it stays useful afterwards.
+    const details = document.createElement('details');
+    details.className = 'case-file-json';
+    const summary = document.createElement('summary');
+    summary.textContent = 'View full policy (JSON)';
+    const pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(policy, null, 2);
+    details.appendChild(summary);
+    details.appendChild(pre);
+    el.appendChild(details);
+  } catch (err) {
+    el.textContent = 'Could not load the screening policy.';
+  }
 }
 
 // ============================================================
