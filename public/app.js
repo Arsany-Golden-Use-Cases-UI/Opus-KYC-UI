@@ -2153,28 +2153,28 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
   overviewTitle.textContent = 'Overview';
   overviewSection.appendChild(overviewTitle);
 
-  const nameVersionRow = document.createElement('div');
-  nameVersionRow.className = 'field-row';
-  nameVersionRow.appendChild(buildLabeledInput({
+  const nameVersionAuthorityRow = document.createElement('div');
+  nameVersionAuthorityRow.className = 'field-row field-row-3';
+  nameVersionAuthorityRow.appendChild(buildLabeledInput({
     label: 'Policy Name',
     value: draft.policy_name,
     disabled,
     onInput: (v) => { draft.policy_name = v; },
   }));
-  nameVersionRow.appendChild(buildLabeledInput({
+  nameVersionAuthorityRow.appendChild(buildLabeledInput({
     label: 'Version',
     value: draft.policy_version,
     disabled,
     onInput: (v) => { draft.policy_version = v; },
   }));
-  overviewSection.appendChild(nameVersionRow);
-
-  overviewSection.appendChild(buildLabeledInput({
+  nameVersionAuthorityRow.appendChild(buildLabeledInput({
     label: 'Issuing Authority',
     value: draft.issuing_authority,
     disabled,
     onInput: (v) => { draft.issuing_authority = v; },
   }));
+  overviewSection.appendChild(nameVersionAuthorityRow);
+
   overviewSection.appendChild(buildLabeledInput({
     label: 'Framework Overview',
     value: draft.framework_overview,

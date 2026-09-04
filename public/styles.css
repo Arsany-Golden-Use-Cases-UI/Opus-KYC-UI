@@ -494,13 +494,18 @@ img {
 }
 
 /* New Intake's form. Was 640px back when the Application Form was a single
-   raw JSON textarea; now that it's ~30 labeled inputs grouped into
-   two-and-three-across sections, that was far too tight. Same dedicated,
-   independently-tunable class as .review-wide below rather than one shared
-   "wide" class, so either panel's width can change without moving the
-   other. */
+   raw JSON textarea, then 960px once it became labeled inputs in
+   two-across rows. Now that every section (Applicant Details, Contact
+   Details, Employment, Account & Compliance, Screening Policy) groups
+   fields three-across via .field-row-3, 960px left each cell cramped and
+   wasted the empty space either side at typical desktop widths - widened
+   to use most of .content's own 1180px cap while still leaving a visible
+   margin so the page doesn't feel edge-to-edge. Same dedicated,
+   independently-tunable class as .review-wide below rather than one
+   shared "wide" class, so either panel's width can change without moving
+   the other. */
 .intake-wide {
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
   width: 100%;
 }
