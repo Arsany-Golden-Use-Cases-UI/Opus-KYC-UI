@@ -1,29 +1,30 @@
 :root {
-  /* Base palette (AppliedAI / Opus brand) */
+  /* Base palette - 2026-09-07: replaced the old multi-color accent set
+     (green/yellow/pink status colors, purple heading, orange-maroon
+     button gradient) with the 5-color palette the user specified:
+     EFEFEF / 387BF0 / 959595 / 373737 / 181818. Blue is reserved for
+     interactive chrome (side nav + buttons) per the user's instruction;
+     every status/heading/text color below comes from the grayscale
+     steps instead. Where a status used to be color-coded (done/pending/
+     flagged), it's now told apart by weight/fill instead of hue: solid
+     dark (#181818 or #373737) = positive/done, solid mid-gray (#959595)
+     = pending/in-progress, outlined dark-on-light = negative/flagged
+     (this brand still has no red) - see .badge.tone-*, .step-pill--*,
+     .review-toggle-btn--active-* below for the concrete mapping. */
   --color-bg: #ffffff;
   --color-surface: #ffffff;
   --color-surface-muted: #efefef; /* recessed surfaces: inputs, code blocks, disabled states */
   --color-border: #efefef;
 
-  --color-text: #181818; /* headings, primary text */
-  --color-text-secondary: #373737; /* body copy */
-  --color-text-muted: #959595; /* captions, hints, micro-labels */
+  --color-text: #181818; /* headings, primary text, "positive/done" fills */
+  --color-text-secondary: #373737; /* body copy, "done" fills */
+  --color-text-muted: #959595; /* captions, hints, micro-labels, "pending" fills */
 
-  /* Accent colors - use sparingly: whole phrases/labels or fill backgrounds
-     only, never to color a single word inside body text. */
-  --color-green: #57d873; /* positive / approved */
-  --color-blue: #387bf0; /* interactive elements and links only */
-  --color-yellow: #f7e85a; /* pending / caution */
-  --color-pink: #ef72e7; /* negative / flagged (brand has no red) */
-
-  --color-blue-tint: #eaf1fb;
-  --color-pink-tint: #fdeefc;
-
-  /* Heading color + primary-button gradient - additive on top of the base
-     brand tokens above, which stay as-is (still drive badges/profile card). */
-  --color-heading: #4c1d95;
-  --color-btn-primary-start: #e08a2c;
-  --color-btn-primary-end: #7a2048;
+  /* The one accent color in the palette - interactive elements only:
+     side nav, buttons, links, focus/hover states. Never used for status
+     labels (see above) so those read as one grayscale system. */
+  --color-blue: #387bf0;
+  --color-blue-tint: rgba(56, 123, 240, 0.12); /* same blue, lower opacity - not a second color */
 
   --shadow-card: 0 2px 6px rgba(24, 24, 24, 0.1), 0 10px 26px rgba(24, 24, 24, 0.08);
 
@@ -34,7 +35,7 @@
      small connection-status pill in the header) while keeping the
      existing AppliedAI/Opus brand palette above untouched. Scoped to this
      single-page app only, not a full multi-tab rebuild. */
-  --color-page-bg: #f4f5f7;
+  --color-page-bg: #efefef;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -56,7 +57,7 @@ h1, h2, h3,
 .brand-title {
   font-family: "Prompt", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-weight: 500;
-  color: var(--color-heading);
+  color: var(--color-text);
 }
 
 img {
@@ -172,8 +173,8 @@ img {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-green);
-  box-shadow: 0 0 0 3px rgba(87, 216, 115, 0.25);
+  background: var(--color-blue);
+  box-shadow: 0 0 0 3px rgba(56, 123, 240, 0.25);
 }
 
 .brand-logo {
@@ -332,7 +333,7 @@ img {
    further down the file - equal specificity would otherwise let source
    order decide, and .btn is defined later. */
 .btn.role-choice-btn--active {
-  background: var(--color-heading);
+  background: var(--color-text);
 }
 
 .role-gate-password-step {
@@ -385,7 +386,7 @@ img {
   overflow-y: auto;
   /* Brand purple instead of the reference's navy - ties the shell back to
      the existing AppliedAI/Opus palette rather than borrowing their color. */
-  background: var(--color-heading);
+  background: var(--color-blue);
   color: rgba(255, 255, 255, 0.9);
   padding: 1.4rem 0 1rem;
 }
@@ -706,7 +707,7 @@ input:focus {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--color-heading);
+  color: var(--color-text);
 }
 
 /* Two-across by default, three for the city/emirate/country row. Children
@@ -796,7 +797,7 @@ input:focus {
 }
 
 .btn-primary:not(:disabled) {
-  background: linear-gradient(90deg, var(--color-btn-primary-start), var(--color-btn-primary-end));
+  background: var(--color-blue);
 }
 
 .btn-secondary {
@@ -826,8 +827,8 @@ input:focus {
 /* ---------- Alerts / banners ---------- */
 
 .error-banner {
-  background: var(--color-pink-tint);
-  border-left: 3px solid var(--color-pink);
+  background: var(--color-surface-muted);
+  border-left: 3px solid var(--color-text);
   color: var(--color-text);
   padding: 0.7rem 0.9rem;
   border-radius: 8px;
@@ -939,7 +940,7 @@ input:focus {
 .progress-bar-fill {
   height: 100%;
   width: 0%;
-  background: var(--color-green);
+  background: var(--color-text-secondary);
   border-radius: 999px;
   transition: width 0.3s ease;
 }
@@ -951,7 +952,7 @@ input:focus {
 .progress-bar-running {
   height: 100%;
   width: 0%;
-  background: var(--color-yellow);
+  background: var(--color-text-muted);
   animation: progress-pulse 1.4s ease-in-out infinite;
 }
 
@@ -984,19 +985,21 @@ input:focus {
   color: var(--color-text-secondary);
 }
 
-/* Completed - solid green, matches the green/positive tone used elsewhere. */
+/* Completed - solid dark fill, the "positive/done" tone used elsewhere
+   (was green; see the :root comment on the 2026-09-07 grayscale pass). */
 .step-pill--done {
-  background: var(--color-green);
-  border-color: var(--color-green);
-  color: #181818;
+  background: var(--color-text-secondary);
+  border-color: var(--color-text-secondary);
+  color: #ffffff;
 }
 
-/* Currently running - yellow/pulsing, distinct from both done and pending so
-   the in-flight node is unmistakable at a glance (mirrors Opus's own
-   execution timeline UI, which marks the active node the same way). */
+/* Currently running - solid mid-gray/pulsing, distinct from both done and
+   pending so the in-flight node is unmistakable at a glance (was yellow;
+   mirrors Opus's own execution timeline UI, which marks the active node
+   the same way). */
 .step-pill--running {
-  background: var(--color-yellow);
-  border-color: var(--color-yellow);
+  background: var(--color-text-muted);
+  border-color: var(--color-text-muted);
   color: #181818;
   animation: progress-pulse 1.4s ease-in-out infinite;
 }
@@ -1012,7 +1015,7 @@ input:focus {
 /* ---------- Human review card ---------- */
 
 .review-card {
-  border-left: 4px solid var(--color-yellow);
+  border-left: 4px solid var(--color-text-muted);
 }
 
 .review-toggle-group {
@@ -1040,24 +1043,25 @@ input:focus {
   filter: brightness(0.97);
 }
 
-/* Matches the app's existing tone convention (approve -> green, reject ->
-   pink) - see TONE_RULES in app.js. */
+/* Matches the app's tone convention (approve -> solid dark fill, reject ->
+   outlined) - see TONE_RULES in app.js. Was green/pink; this brand has no
+   red, so "reject" is now told apart by an outline instead of a hue. */
 .review-toggle-btn--active-approve {
-  background: var(--color-green);
-  border-color: var(--color-green);
-  color: #181818;
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: #ffffff;
 }
 
 .review-toggle-btn--active-reject {
-  background: var(--color-pink);
-  border-color: var(--color-pink);
-  color: #181818;
+  background: var(--color-surface-muted);
+  border-color: var(--color-text);
+  color: var(--color-text);
 }
 
 /* ---------- Error card ---------- */
 
 .error-card {
-  border-left: 4px solid var(--color-pink);
+  border-left: 4px solid var(--color-text);
 }
 
 .error-card .badge {
@@ -1139,18 +1143,25 @@ input:focus {
   border-radius: 14px;
 }
 
+/* Was solid green - now a solid dark fill, matching the "positive/done"
+   tone used across step-pills/toggles (see the :root comment). */
 .badge.tone-green {
-  background: var(--color-green);
-  color: #181818;
+  background: var(--color-text-secondary);
+  color: #ffffff;
 }
 
+/* Was solid pink - now outlined instead of a second solid fill, so it
+   doesn't read the same as tone-green/tone-neutral at a glance (this
+   brand has no red to fall back on). */
 .badge.tone-pink {
-  background: var(--color-pink);
-  color: #181818;
+  background: var(--color-surface-muted);
+  border: 1.5px solid var(--color-text);
+  color: var(--color-text);
 }
 
+/* Was solid yellow - now the mid-gray "pending" fill. */
 .badge.tone-yellow {
-  background: var(--color-yellow);
+  background: var(--color-text-muted);
   color: #181818;
 }
 
@@ -1200,7 +1211,7 @@ details summary {
   gap: 1.1rem;
   padding: 1.25rem 1.5rem;
   border-radius: 18px;
-  background: linear-gradient(135deg, var(--color-blue) 0%, var(--color-pink) 100%);
+  background: linear-gradient(135deg, var(--color-blue) 0%, var(--color-text) 100%);
   color: #ffffff;
   box-shadow: var(--shadow-card);
 }
@@ -1287,7 +1298,7 @@ details summary {
   font-family: "Prompt", sans-serif;
   font-weight: 500;
   font-size: 1.7rem;
-  color: var(--color-heading);
+  color: var(--color-text);
   margin-bottom: 0.2rem;
 }
 
@@ -1376,7 +1387,7 @@ details summary {
 
 .review-queue-card:hover,
 .review-queue-card:focus-visible {
-  border-color: var(--color-accent, var(--color-heading));
+  border-color: var(--color-accent, var(--color-blue));
   transform: translateY(-1px);
 }
 
@@ -1384,7 +1395,7 @@ details summary {
   font-family: "Prompt", sans-serif;
   font-weight: 500;
   font-size: 1rem;
-  color: var(--color-heading);
+  color: var(--color-text);
   margin-bottom: 0.35rem;
 }
 
@@ -1596,13 +1607,13 @@ details summary {
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-surface);
-  color: var(--color-pink);
+  color: var(--color-text-secondary);
   font-weight: 700;
   cursor: pointer;
 }
 
 .row-remove-btn:hover {
-  background: var(--color-pink-tint);
+  background: var(--color-surface-muted);
 }
 
 .add-row-btn {
@@ -1669,7 +1680,7 @@ textarea:disabled {
 }
 
 .policy-editor-status.is-dirty {
-  color: var(--color-heading);
+  color: var(--color-text);
   font-weight: 600;
 }
 
