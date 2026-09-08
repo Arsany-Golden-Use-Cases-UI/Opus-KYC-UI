@@ -1135,11 +1135,19 @@ input:focus {
    renderRiskSignal() (app.js) scanning the real Audit Summary text for an
    explicit "overall risk is low/medium/high" phrase - the tile itself
    stays hidden (see risk-signal-tile in index.html) whenever that scan
-   finds nothing, so there's never a fabricated reading. Grayscale, not
-   the green/yellow/red a risk gradient might normally use, matching the
-   rest of the app since the 2026-09-07 palette pass - light end (low
-   risk) reads as calm, dark end (high risk) as severe, same "darker =
-   more weight" convention as .badge.tone-pink's outline treatment. */
+   finds nothing, so there's never a fabricated reading.
+
+   UPDATED 2026-09-08: the gradient below is a deliberate, scoped
+   exception to the app's grayscale-only rule from the 2026-09-07 palette
+   pass - a severity gauge is exactly the case where color is functional,
+   not decorative, so per Arsany's request this is green (low) -> yellow
+   (medium) -> dark (high), skipping red entirely per the brand's
+   existing "no red" rule (same reasoning .badge.tone-pink's outline
+   treatment used red's absence for). The green/yellow hex values are the
+   same ones removed from :root in that palette pass (--color-green /
+   --color-yellow) - reused here inline rather than reintroduced as
+   global tokens, since this gauge is meant to be the one place they
+   still apply, not a door back into color-coded badges elsewhere. */
 .risk-gauge {
   margin-top: 0.35rem;
 }
@@ -1150,8 +1158,8 @@ input:focus {
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    var(--color-surface-muted) 0%,
-    var(--color-text-muted) 50%,
+    #57d873 0%,
+    #f7e85a 50%,
     var(--color-text) 100%
   );
 }
