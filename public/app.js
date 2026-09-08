@@ -465,8 +465,53 @@ function toneFor(value) {
   return 'neutral';
 }
 
+// Same keyword-matching shape as TONE_RULES above, and deliberately kept
+// as its own list rather than folded into TONE_RULES/an icon-per-tone
+// map - a tone (e.g. 'pink') can apply to values that shouldn't
+// necessarily share an icon, and vice versa. ︎ (VS15, "text
+// presentation") on the warning sign keeps it a plain glyph that
+// inherits the badge's text color instead of rendering as a colored
+// emoji, matching ✓/✕ either side of it - 👤 (bust-in-silhouette) has no
+// text-presentation variant but renders as a plain outline on most
+// platforms already, unlike a skin-toned person emoji.
+const BADGE_ICON_RULES = [
+  { test: /approve|pass|clear|accept/i, icon: '\u2713' },
+  { test: /reject|declin|deny|fail/i, icon: '\u2715' },
+  { test: /flag|escalat|hold|pending/i, icon: '\u26a0\ufe0e' },
+  { test: /human_review|manual|review|refer/i, icon: '\ud83d\udc64' },
+];
+
+function iconFor(value) {
+  if (!value) return '';
+  const str = String(value);
+  for (const rule of BADGE_ICON_RULES) {
+    if (rule.test.test(str)) return rule.icon;
+  }
+  return '';
+}
+
+// Sentence case ("HUMAN_REVIEW" -> "Human review") rather than
+// humanizeLabel()'s title case ("Human Review") - matches how a
+// reference design Arsany shared displays these two headline badges
+// specifically. Returns null (not '—') on nothing to format, so the
+// caller's own '—' fallback stays the single place that placeholder
+// is spelled out.
+function sentenceCaseValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const spaced = String(value).replace(/[_-]+/g, ' ').trim().toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+// Final Decision / Routing Flag headline badges only (setBadgeTone's only
+// two callers, in showResults()) - UPDATED 2026-09-08 to show a
+// humanized, sentence-cased label with a leading icon instead of the raw
+// enum string, matching that reference design. Case Queue table pills
+// (buildBadgeSpan) and everything else using tone-* colors are
+// untouched - they still show the raw value, no icon.
 function setBadgeTone(el, value) {
-  el.textContent = value ?? '—';
+  const label = sentenceCaseValue(value) ?? '—';
+  const icon = iconFor(value);
+  el.textContent = icon ? `${icon} ${label}` : label;
   el.classList.remove(...TONE_CLASSES);
   el.classList.add(`tone-${toneFor(value)}`);
 }

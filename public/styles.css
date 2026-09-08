@@ -1130,6 +1130,17 @@ input:focus {
   text-align: left;
 }
 
+/* Routing Flag headline badge only (2026-09-08, matching a reference
+   design Arsany shared) - a soft blue pill instead of the solid-blue/
+   white-text every other tone-blue badge uses (Case Queue table pills,
+   the PEP/US-person Yes badges in Case Inputs). Scoped via the ancestor
+   selector rather than changing .badge.tone-blue itself, same reasoning
+   as .badge-lg.tone-green above. */
+.routing-flag-group .badge.tone-blue {
+  background: var(--color-blue-tint);
+  color: var(--color-blue);
+}
+
 /* Automated Risk Signal gauge (ADDED 2026-09-08) - a static low/medium/
    high position marker, not an animated meter. Position comes from
    renderRiskSignal() (app.js) scanning the real Audit Summary text for an
@@ -1240,6 +1251,19 @@ input:focus {
 .badge.tone-green {
   background: var(--color-text-secondary);
   color: #ffffff;
+}
+
+/* Final Decision headline badge only (2026-09-08, matching a reference
+   design Arsany shared) - .badge-lg is used nowhere else in the app, so
+   this doesn't touch tone-green anywhere else (Case Queue table pills,
+   step-pills, review-toggle). Darker background + the same green used
+   for the risk gauge's "low" end, instead of the plain white-on-dark
+   every other tone-green badge uses. Source order matters here: same
+   specificity as .badge.tone-green above, so this has to come after it
+   to win. */
+.badge-lg.tone-green {
+  background: var(--color-text);
+  color: #57d873;
 }
 
 /* Was solid pink - now outlined instead of a second solid fill, so it
