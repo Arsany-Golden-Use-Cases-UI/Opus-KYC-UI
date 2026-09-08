@@ -1098,16 +1098,32 @@ input:focus {
   margin: 1rem 0 1.5rem;
 }
 
-/* Final Decision / Routing Flag as their own bordered tiles (2026-09-08
-   restyle, matching a reference case-detail design) instead of two plain
-   label+badge pairs - same visual language as .stat-tile elsewhere
-   (Case Queue / Reports), just scoped locally since these live inside an
-   already-bordered .results-card. */
+/* Result panel layout wrapper (RENAMED from .results-card 2026-09-08,
+   when Final Decision / Routing Flag / Automated Risk Signal / Audit
+   Summary+Case File split from one big bordered card into several
+   independent ones - matching a reference design Arsany shared). No
+   longer a .card itself, just stacks whatever cards are inside it -
+   same flex-column-with-gap shape as .case-detail-outcome. Needs its
+   own [hidden] override for the same reason .view-panel does: this rule
+   sets its own `display`, so the UA [hidden]{display:none} rule would
+   otherwise lose to it at equal specificity. */
+.results-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.results-panel[hidden] {
+  display: none;
+}
+
+/* Final Decision / Routing Flag / Automated Risk Signal each get the
+   .card class now (own border+shadow+background) - this just adds the
+   tighter padding that distinguishes these compact metric tiles from a
+   normal full-padding .card, same visual language as .stat-tile
+   elsewhere (Case Queue / Reports). */
 .result-tile {
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
   padding: 1.1rem 1.25rem;
-  background: var(--color-surface);
 }
 
 .routing-flag-group {

@@ -416,15 +416,22 @@
             <div id="error-nodes"></div>
           </section>
 
-          <section id="results-panel" class="card results-card" hidden>
-            <h2 class="card-title">Result</h2>
-
+          <!-- Result "card" is now several independent cards (2026-09-08 -
+               matches a reference design Arsany shared) instead of one big
+               bordered box: Final Decision / Routing Flag / Automated Risk
+               Signal each get their own card in a row, Audit Summary + Case
+               File share a separate card below. #results-panel itself is
+               just the layout wrapper now, not a .card - see .results-panel
+               in styles.css, which needs its own [hidden] override for the
+               same reason .view-panel does (an author `display` rule beats
+               the UA [hidden]{display:none} one otherwise). -->
+          <section id="results-panel" class="results-panel" hidden>
             <div class="result-headline">
-              <div class="result-tile">
+              <div class="card result-tile">
                 <div class="result-label">Final Decision</div>
                 <div id="final-decision" class="badge badge-lg"></div>
               </div>
-              <div class="routing-flag-group result-tile">
+              <div class="card routing-flag-group result-tile">
                 <div class="result-label">Routing Flag</div>
                 <div id="routing-flag" class="badge"></div>
               </div>
@@ -432,7 +439,7 @@
                    finds an explicit "overall risk is low/medium/high" phrase in the
                    real Audit Summary text below. There is no separate structured risk
                    score output today, so this never guesses: no match, no tile. -->
-              <div id="risk-signal-tile" class="result-tile risk-signal-tile" hidden>
+              <div id="risk-signal-tile" class="card result-tile risk-signal-tile" hidden>
                 <div class="result-label">Automated Risk Signal</div>
                 <div class="risk-gauge">
                   <div class="risk-gauge-track">
@@ -445,14 +452,16 @@
               </div>
             </div>
 
-            <div class="result-section">
-              <h3>Audit Summary</h3>
-              <div id="audit-summary" class="audit-summary"></div>
-            </div>
+            <div class="card">
+              <div class="result-section">
+                <h3>Audit Summary</h3>
+                <div id="audit-summary" class="audit-summary"></div>
+              </div>
 
-            <div class="result-section">
-              <h3>Case File</h3>
-              <div id="case-file"></div>
+              <div class="result-section">
+                <h3>Case File</h3>
+                <div id="case-file"></div>
+              </div>
             </div>
 
             <button id="reset-btn" type="button" class="btn btn-secondary">Run Another</button>
@@ -566,15 +575,16 @@
                 <div id="case-detail-error-nodes"></div>
               </section>
 
-              <section id="case-detail-results-panel" class="card results-card" hidden>
-                <h2 class="card-title">Result</h2>
-
+              <!-- Same split-into-independent-cards treatment as New
+                   Intake's own results-panel above - see that block's
+                   comment for the full rationale. -->
+              <section id="case-detail-results-panel" class="results-panel" hidden>
                 <div class="result-headline">
-                  <div class="result-tile">
+                  <div class="card result-tile">
                     <div class="result-label">Final Decision</div>
                     <div id="case-detail-final-decision" class="badge badge-lg"></div>
                   </div>
-                  <div class="routing-flag-group result-tile">
+                  <div class="card routing-flag-group result-tile">
                     <div class="result-label">Routing Flag</div>
                     <div id="case-detail-routing-flag" class="badge"></div>
                   </div>
@@ -582,7 +592,7 @@
                        finds an explicit "overall risk is low/medium/high" phrase in the
                        real Audit Summary text below. There is no separate structured risk
                        score output today, so this never guesses: no match, no tile. -->
-                  <div id="case-detail-risk-signal-tile" class="result-tile risk-signal-tile" hidden>
+                  <div id="case-detail-risk-signal-tile" class="card result-tile risk-signal-tile" hidden>
                     <div class="result-label">Automated Risk Signal</div>
                     <div class="risk-gauge">
                       <div class="risk-gauge-track">
@@ -595,14 +605,16 @@
                   </div>
                 </div>
 
-                <div class="result-section">
-                  <h3>Audit Summary</h3>
-                  <div id="case-detail-audit-summary" class="audit-summary"></div>
-                </div>
+                <div class="card">
+                  <div class="result-section">
+                    <h3>Audit Summary</h3>
+                    <div id="case-detail-audit-summary" class="audit-summary"></div>
+                  </div>
 
-                <div class="result-section">
-                  <h3>Case File</h3>
-                  <div id="case-detail-case-file"></div>
+                  <div class="result-section">
+                    <h3>Case File</h3>
+                    <div id="case-detail-case-file"></div>
+                  </div>
                 </div>
               </section>
             </div>
