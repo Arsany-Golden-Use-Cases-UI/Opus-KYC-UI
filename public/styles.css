@@ -1111,6 +1111,16 @@ input:focus {
   gap: 1rem;
 }
 
+/* Case Detail's instance now sits directly in .view-panel and receives
+   the `hidden` attribute itself (New Intake's instance stays wrapped in
+   .results-panel[hidden], so this override is a no-op there). Needs its
+   own override for the same author-vs-UA-stylesheet reason .view-panel
+   and .results-panel already have one - this rule's own `display: grid`
+   otherwise beats the UA [hidden]{display:none} rule. */
+.result-headline[hidden] {
+  display: none;
+}
+
 /* Result panel layout wrapper (RENAMED from .results-card 2026-09-08,
    when Final Decision / Routing Flag / Automated Risk Signal / Audit
    Summary+Case File split from one big bordered card into several

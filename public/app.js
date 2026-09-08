@@ -410,7 +410,8 @@ const caseDetailReviewNotice = document.getElementById('case-detail-review-notic
 const caseDetailErrorPanel = document.getElementById('case-detail-error-panel');
 const caseDetailErrorStatus = document.getElementById('case-detail-error-status');
 const caseDetailErrorNodes = document.getElementById('case-detail-error-nodes');
-const caseDetailResultsPanel = document.getElementById('case-detail-results-panel');
+const caseDetailResultHeadline = document.getElementById('case-detail-result-headline');
+const caseDetailAuditCard = document.getElementById('case-detail-audit-card');
 
 // Bundles passed into the now-parameterized renderProgress()/resetProgress()
 // (see below) so they write into these elements instead of New Intake's.
@@ -1417,7 +1418,8 @@ function showResults(outputs, elements = {
   riskSignalTile: document.getElementById('risk-signal-tile'),
   riskGaugeMarker: document.getElementById('risk-gauge-marker'),
 }) {
-  elements.panel.hidden = false;
+  const panels = Array.isArray(elements.panel) ? elements.panel : [elements.panel];
+  panels.forEach((panel) => { panel.hidden = false; });
 
   setBadgeTone(elements.finalDecision, outputs.finalDecision);
   setBadgeTone(elements.routingFlag, outputs.routingFlag);
@@ -1834,7 +1836,8 @@ function resetCaseDetailPanel() {
   resetProgress(CASE_DETAIL_RESET_ELEMENTS);
   caseDetailReviewNotice.hidden = true;
   caseDetailErrorPanel.hidden = true;
-  caseDetailResultsPanel.hidden = true;
+  caseDetailResultHeadline.hidden = true;
+  caseDetailAuditCard.hidden = true;
 }
 
 // Row click handler for Case Queue (see renderCaseTable()
@@ -1923,7 +1926,7 @@ function startCaseDetailPolling(jobId) {
         stopCaseDetailPolling();
         caseDetailStatusPanel.hidden = true;
         showResults(data.outputs, {
-          panel: caseDetailResultsPanel,
+          panel: [caseDetailResultHeadline, caseDetailAuditCard],
           finalDecision: document.getElementById('case-detail-final-decision'),
           routingFlag: document.getElementById('case-detail-routing-flag'),
           auditSummary: document.getElementById('case-detail-audit-summary'),

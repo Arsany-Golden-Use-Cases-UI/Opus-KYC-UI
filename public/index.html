@@ -528,6 +528,38 @@
           <h1 class="page-title" id="case-detail-title">Case</h1>
           <p class="subtitle" id="case-detail-subtitle"></p>
 
+          <!-- Final Decision / Routing Flag / Automated Risk Signal - a
+               full-width row directly under the subtitle, matching the
+               reference design Arsany shared (2026-09-08): these three read
+               first, before Case Inputs, instead of tucked into a side
+               column. Shown/hidden together with #case-detail-audit-card
+               below by showResults()/resetCaseDetailPanel() in app.js. -->
+          <div id="case-detail-result-headline" class="result-headline" hidden>
+            <div class="card result-tile">
+              <div class="result-label">Final Decision</div>
+              <div id="case-detail-final-decision" class="badge badge-lg"></div>
+            </div>
+            <div class="card routing-flag-group result-tile">
+              <div class="result-label">Routing Flag</div>
+              <div id="case-detail-routing-flag" class="badge"></div>
+            </div>
+            <!-- Hidden by default - shown only when renderRiskSignal() (app.js)
+                 finds an explicit "overall risk is low/medium/high" phrase in the
+                 real Audit Summary text below. There is no separate structured risk
+                 score output today, so this never guesses: no match, no tile. -->
+            <div id="case-detail-risk-signal-tile" class="card result-tile risk-signal-tile" hidden>
+              <div class="result-label">Automated Risk Signal</div>
+              <div class="risk-gauge">
+                <div class="risk-gauge-track">
+                  <div id="case-detail-risk-gauge-marker" class="risk-gauge-marker"></div>
+                </div>
+                <div class="risk-gauge-labels">
+                  <span>Low</span><span>Medium</span><span>High</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Inputs (left) + whatever status-dependent outcome applies
                (right) - see .case-detail-columns in styles.css. Exactly one
                of the four outcome elements below is ever visible at a time. -->
@@ -575,48 +607,23 @@
                 <div id="case-detail-error-nodes"></div>
               </section>
 
-              <!-- Same split-into-independent-cards treatment as New
-                   Intake's own results-panel above - see that block's
-                   comment for the full rationale. -->
-              <section id="case-detail-results-panel" class="results-panel" hidden>
-                <div class="result-headline">
-                  <div class="card result-tile">
-                    <div class="result-label">Final Decision</div>
-                    <div id="case-detail-final-decision" class="badge badge-lg"></div>
-                  </div>
-                  <div class="card routing-flag-group result-tile">
-                    <div class="result-label">Routing Flag</div>
-                    <div id="case-detail-routing-flag" class="badge"></div>
-                  </div>
-                  <!-- Hidden by default - shown only when renderRiskSignal() (app.js)
-                       finds an explicit "overall risk is low/medium/high" phrase in the
-                       real Audit Summary text below. There is no separate structured risk
-                       score output today, so this never guesses: no match, no tile. -->
-                  <div id="case-detail-risk-signal-tile" class="card result-tile risk-signal-tile" hidden>
-                    <div class="result-label">Automated Risk Signal</div>
-                    <div class="risk-gauge">
-                      <div class="risk-gauge-track">
-                        <div id="case-detail-risk-gauge-marker" class="risk-gauge-marker"></div>
-                      </div>
-                      <div class="risk-gauge-labels">
-                        <span>Low</span><span>Medium</span><span>High</span>
-                      </div>
-                    </div>
-                  </div>
+              <!-- Audit Summary + Case File - stands alone now that the
+                   headline cards above have moved to the full-width row.
+                   Occupies the same spot "Risk factors identified" has in
+                   the reference design; we don't have real per-factor risk
+                   data to build that card honestly, so this is what goes
+                   there instead. -->
+              <div id="case-detail-audit-card" class="card" hidden>
+                <div class="result-section">
+                  <h3>Audit Summary</h3>
+                  <div id="case-detail-audit-summary" class="audit-summary"></div>
                 </div>
 
-                <div class="card">
-                  <div class="result-section">
-                    <h3>Audit Summary</h3>
-                    <div id="case-detail-audit-summary" class="audit-summary"></div>
-                  </div>
-
-                  <div class="result-section">
-                    <h3>Case File</h3>
-                    <div id="case-detail-case-file"></div>
-                  </div>
+                <div class="result-section">
+                  <h3>Case File</h3>
+                  <div id="case-detail-case-file"></div>
                 </div>
-              </section>
+              </div>
             </div>
           </div>
         </section>
