@@ -1081,16 +1081,26 @@ input:focus {
 /* ---------- Results card ---------- */
 
 .result-headline {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
   margin: 1rem 0 1.5rem;
 }
 
+/* Final Decision / Routing Flag as their own bordered tiles (2026-09-08
+   restyle, matching a reference case-detail design) instead of two plain
+   label+badge pairs - same visual language as .stat-tile elsewhere
+   (Case Queue / Reports), just scoped locally since these live inside an
+   already-bordered .results-card. */
+.result-tile {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  background: var(--color-surface);
+}
+
 .routing-flag-group {
-  text-align: right;
+  text-align: left;
 }
 
 .result-label {
@@ -1175,13 +1185,13 @@ input:focus {
   color: var(--color-text-secondary);
 }
 
+/* Was a shaded/boxed block (like a code excerpt); reads as plain prose
+   now, matching a reference design that shows this as an ordinary
+   paragraph directly on the card instead of calling it out as a quote. */
 .audit-summary {
   white-space: pre-wrap;
   font-size: 0.9rem;
-  line-height: 1.55;
-  background: var(--color-surface-muted);
-  border-radius: 10px;
-  padding: 0.9rem;
+  line-height: 1.6;
   color: var(--color-text-secondary);
 }
 
@@ -1515,6 +1525,101 @@ details summary {
   color: var(--color-text);
   text-align: right;
   word-break: break-all;
+}
+
+/* ---------- Case Inputs: file previews + structured Application Form
+   review (ADDED 2026-09-08) ----------
+   Case Detail's "Case Inputs" panel used to show the Application Form as
+   one long JSON-stringified blob inside a plain settings-row (see
+   renderReviewInputs() in app.js). These render the same submitted data
+   as labeled fields instead, grouped exactly like the New Intake form's
+   own sections (buildApplicationFormReview() maps straight onto
+   buildApplicationFormJson()'s shape and reuses that form's exact field
+   labels) - a case reads the same whether you're filling it in or
+   reviewing it afterwards. The raw JSON is still one click away (the
+   existing "View raw ... (JSON)" details block below), nothing is lost,
+   just no longer the only view. */
+
+.file-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.file-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+
+.file-preview-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.file-preview-body {
+  min-width: 0;
+}
+
+.file-preview-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.file-preview-value {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Section headings inside the Application Form review - same uppercase
+   mono micro-label look as .form-section-title (New Intake's own section
+   headers), just with its own top-margin rhythm since these sit one
+   after another inside a single card instead of each getting a
+   .form-section border-top. */
+.review-section-title {
+  margin-top: 1.4rem;
+}
+
+.review-section-title:first-child {
+  margin-top: 0;
+}
+
+.review-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.9rem 1.25rem;
+}
+
+.review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.review-field-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.review-field-value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
 }
 
 /* ---------- Screening policy editor (New Intake) ---------- */

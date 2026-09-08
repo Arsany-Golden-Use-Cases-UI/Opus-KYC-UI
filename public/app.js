@@ -801,10 +801,176 @@ function unwrapReviewValue(v) {
   return v;
 }
 
+// Mirrors buildApplicationFormJson()'s exact shape (New Intake, above)
+// and that form's own section grouping/labels - so a submitted case's
+// Application Form reads the same whether you're filling it in or
+// reviewing it afterwards in Case Inputs. [path, label, kind] per field;
+// kind is undefined (plain text), 'bool', or 'list'. ADDED 2026-09-08
+// alongside buildApplicationFormReview() below, replacing what used to
+// be this whole object dumped as one JSON-stringified settings-row.
+const APPLICATION_FORM_SECTIONS = [
+  {
+    title: 'Applicant Details',
+    fields: [
+      ['applicant.full_name', 'Full Name'],
+      ['applicant.date_of_birth', 'Date of Birth'],
+      ['applicant.nationality', 'Nationality'],
+      ['applicant.place_of_birth', 'Place of Birth'],
+      ['applicant.sex', 'Sex'],
+      ['applicant.marital_status', 'Marital Status'],
+      ['applicant.residency_status', 'Residency Status'],
+      ['applicant.emirates_id_number', 'Emirates ID Number'],
+      ['applicant.passport_number', 'Passport Number'],
+      ['applicant.passport_country', 'Passport Country'],
+    ],
+  },
+  {
+    title: 'Contact Details',
+    fields: [
+      ['contact.mobile', 'Mobile'],
+      ['contact.email', 'Email'],
+      ['contact.address.line_1', 'Address Line 1'],
+      ['contact.address.line_2', 'Address Line 2'],
+      ['contact.address.city', 'City'],
+      ['contact.address.emirate', 'Emirate'],
+      ['contact.address.country', 'Country'],
+    ],
+  },
+  {
+    title: 'Employment',
+    fields: [
+      ['employment.status', 'Employment Status'],
+      ['employment.employer', 'Employer'],
+      ['employment.occupation', 'Occupation'],
+      ['employment.industry', 'Industry'],
+      ['employment.monthly_income_aed', 'Monthly Income (AED)'],
+      ['employment.years_at_employer', 'Years at Employer'],
+    ],
+  },
+  {
+    title: 'Account & Compliance',
+    fields: [
+      ['product_requested', 'Product Requested'],
+      ['source_of_funds', 'Source of Funds'],
+      ['expected_monthly_deposits_aed', 'Expected Monthly Deposits (AED)'],
+      ['expected_transaction_volume', 'Expected Transaction Volume'],
+      ['branch', 'Branch'],
+      ['channel', 'Channel'],
+      ['tax_residency_countries', 'Tax Residency Countries', 'list'],
+      ['pep_self_declaration', 'PEP Self-Declaration', 'bool'],
+      ['us_person_for_fatca', 'US Person for FATCA', 'bool'],
+    ],
+  },
+];
+
+function getPath(obj, path) {
+  return path.split('.').reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), obj);
+}
+
+// Returns a Node (not a string) so the boolean case can be a real <span
+// class="badge"> instead of literal "Yes"/"No" text.
+function formatReviewFieldValue(rawValue, kind) {
+  if (kind === 'bool') {
+    const badge = document.createElement('span');
+    badge.className = `badge ${rawValue ? 'tone-blue' : 'tone-neutral'}`;
+    badge.textContent = rawValue ? 'Yes' : 'No';
+    return badge;
+  }
+  if (kind === 'list') {
+    const text = Array.isArray(rawValue) && rawValue.length ? rawValue.join(', ') : '\u2014';
+    return document.createTextNode(text);
+  }
+  const text = rawValue === null || rawValue === undefined || rawValue === '' ? '\u2014' : String(rawValue);
+  return document.createTextNode(text);
+}
+
+// Renders a parsed Application Form JSON object as read-only grouped
+// fields, in the exact sections/labels buildApplicationFormJson() and the
+// New Intake form itself use. Always renders every field (with the app's
+// usual '\u2014' placeholder for anything blank) rather than hiding empty
+// ones, so nothing looks like it silently disappeared.
+function buildApplicationFormReview(formData) {
+  const container = document.createElement('div');
+  container.className = 'application-form-review';
+
+  APPLICATION_FORM_SECTIONS.forEach((section) => {
+    const heading = document.createElement('h4');
+    heading.className = 'form-section-title review-section-title';
+    heading.textContent = section.title;
+    container.appendChild(heading);
+
+    const grid = document.createElement('div');
+    grid.className = 'review-field-grid';
+    section.fields.forEach(([path, label, kind]) => {
+      const field = document.createElement('div');
+      field.className = 'review-field';
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'review-field-label';
+      labelEl.textContent = label;
+
+      const valueEl = document.createElement('div');
+      valueEl.className = 'review-field-value';
+      valueEl.appendChild(formatReviewFieldValue(getPath(formData, path), kind));
+
+      field.appendChild(labelEl);
+      field.appendChild(valueEl);
+      grid.appendChild(field);
+    });
+    container.appendChild(grid);
+  });
+
+  return container;
+}
+
+// Small icon + label + value card for a file-type input (ID Document /
+// Proof of Address) - same data as a plain settings-row would show, just
+// styled to read as a file reference instead of a generic key/value pair.
+function buildFilePreviewCard(label, value) {
+  const card = document.createElement('div');
+  card.className = 'file-preview-card';
+
+  const icon = document.createElement('span');
+  icon.className = 'file-preview-icon';
+  icon.textContent = '\ud83d\udcc4';
+  card.appendChild(icon);
+
+  const body = document.createElement('div');
+  body.className = 'file-preview-body';
+
+  const labelEl = document.createElement('div');
+  labelEl.className = 'file-preview-label';
+  labelEl.textContent = label;
+  body.appendChild(labelEl);
+
+  const text = value === null || value === undefined || value === '' ? '\u2014' : String(value);
+  const valueEl = document.createElement('div');
+  valueEl.className = 'file-preview-value';
+  valueEl.textContent = text;
+  valueEl.title = text;
+  body.appendChild(valueEl);
+
+  card.appendChild(body);
+  return card;
+}
+
 // containerId defaults to the HITL review card's own inputs block; the
 // case-detail panel (loadAndShowCaseDetail(), near renderCaseTable())
 // passes 'case-detail-inputs' instead to render a job's original inputs
-// there, reusing this same generic key/value rendering.
+// there, reusing this same generic key/value rendering - PLUS, as of
+// 2026-09-08, special-cased display for whichever of these four New
+// Intake input labels are actually present: ID Document / Proof of
+// Address become file-preview cards, Application Form JSON gets parsed
+// and rendered via buildApplicationFormReview() instead of a JSON blob,
+// and Screening Policy (too large to usefully show inline, and not part
+// of what the applicant submitted) is dropped from the visible list -
+// it's still in the raw-JSON details block below, nothing is deleted.
+// None of this is keyed on Opus's opaque variable IDs (never available
+// client-side) - it matches on the human label instead, so it only ever
+// activates when that label is actually present and otherwise falls back
+// to the original flat row unchanged. A HITL review dispatch's inputs
+// (this function's other caller) come from a different node entirely and
+// won't match any of these labels, so that caller is unaffected.
 function renderReviewInputs(inputs, containerId = 'review-inputs') {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -822,13 +988,12 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
     return;
   }
 
+  const fileFieldEntries = [];
+  const plainEntries = [];
+  let applicationForm = null;
+
   entries.forEach(([key, rawValue]) => {
     const value = unwrapReviewValue(rawValue);
-    const row = document.createElement('div');
-    row.className = 'settings-row';
-
-    const label = document.createElement('div');
-    label.className = 'settings-row-label';
     // A case-detail input (server.js's GET /api/run/:id/inputs) carries a
     // real label fetched live from the workflow's Input node definition -
     // prefer that. A HITL review dispatch's inputs (the other caller of
@@ -838,7 +1003,61 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
     // but that's still more scannable than the full prefixed id, and the
     // raw-JSON view below has the ground truth either way.
     const rawLabel = rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue) ? rawValue.label : null;
-    label.textContent = rawLabel || humanizeLabel(key.replace(/^workflow_(input|output)_/, ''));
+    const label = rawLabel || humanizeLabel(key.replace(/^workflow_(input|output)_/, ''));
+    const normalizedLabel = label.trim().toLowerCase();
+
+    if (normalizedLabel === 'application form json' || normalizedLabel === 'application form') {
+      let parsed = null;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch {
+          parsed = null;
+        }
+      } else if (value && typeof value === 'object') {
+        parsed = value;
+      }
+      if (parsed) {
+        applicationForm = parsed;
+        return;
+      }
+      // Fell through (couldn't parse) - render it the old way rather than
+      // silently dropping it.
+    }
+
+    if (normalizedLabel === 'id document' || normalizedLabel === 'proof of address') {
+      fileFieldEntries.push([label, value]);
+      return;
+    }
+
+    if (normalizedLabel === 'screening policy') {
+      // Not part of what the applicant submitted, and too large to show
+      // inline - still in the raw-JSON block below via `inputs`, just not
+      // in the visible list.
+      return;
+    }
+
+    plainEntries.push([label, value]);
+  });
+
+  if (fileFieldEntries.length) {
+    const row = document.createElement('div');
+    row.className = 'file-preview-row';
+    fileFieldEntries.forEach(([label, value]) => row.appendChild(buildFilePreviewCard(label, value)));
+    container.appendChild(row);
+  }
+
+  if (applicationForm) {
+    container.appendChild(buildApplicationFormReview(applicationForm));
+  }
+
+  plainEntries.forEach(([label, value]) => {
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'settings-row-label';
+    labelEl.textContent = label;
 
     const valueEl = document.createElement('div');
     valueEl.className = 'settings-row-value';
@@ -848,7 +1067,7 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
       valueEl.textContent = value === null || value === undefined || value === '' ? '\u2014' : String(value);
     }
 
-    row.appendChild(label);
+    row.appendChild(labelEl);
     row.appendChild(valueEl);
     container.appendChild(row);
   });
@@ -856,7 +1075,7 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
   const details = document.createElement('details');
   details.className = 'case-file-json';
   const summary = document.createElement('summary');
-  summary.textContent = 'View raw review inputs (JSON)';
+  summary.textContent = containerId === 'case-detail-inputs' ? 'View raw application JSON' : 'View raw review inputs (JSON)';
   const pre = document.createElement('pre');
   pre.textContent = JSON.stringify(inputs, null, 2);
   details.appendChild(summary);
