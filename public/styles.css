@@ -1114,6 +1114,53 @@ input:focus {
   text-align: left;
 }
 
+/* Automated Risk Signal gauge (ADDED 2026-09-08) - a static low/medium/
+   high position marker, not an animated meter. Position comes from
+   renderRiskSignal() (app.js) scanning the real Audit Summary text for an
+   explicit "overall risk is low/medium/high" phrase - the tile itself
+   stays hidden (see risk-signal-tile in index.html) whenever that scan
+   finds nothing, so there's never a fabricated reading. Grayscale, not
+   the green/yellow/red a risk gradient might normally use, matching the
+   rest of the app since the 2026-09-07 palette pass - light end (low
+   risk) reads as calm, dark end (high risk) as severe, same "darker =
+   more weight" convention as .badge.tone-pink's outline treatment. */
+.risk-gauge {
+  margin-top: 0.35rem;
+}
+
+.risk-gauge-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 0%,
+    var(--color-text-muted) 50%,
+    var(--color-text) 100%
+  );
+}
+
+.risk-gauge-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-text);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border);
+  transform: translate(-50%, -50%);
+}
+
+.risk-gauge-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
 .result-label {
   font-family: var(--font-mono);
   font-size: 0.7rem;

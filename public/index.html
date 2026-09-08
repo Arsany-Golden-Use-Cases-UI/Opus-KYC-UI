@@ -428,6 +428,21 @@
                 <div class="result-label">Routing Flag</div>
                 <div id="routing-flag" class="badge"></div>
               </div>
+              <!-- Hidden by default - shown only when renderRiskSignal() (app.js)
+                   finds an explicit "overall risk is low/medium/high" phrase in the
+                   real Audit Summary text below. There is no separate structured risk
+                   score output today, so this never guesses: no match, no tile. -->
+              <div id="risk-signal-tile" class="result-tile risk-signal-tile" hidden>
+                <div class="result-label">Automated Risk Signal</div>
+                <div class="risk-gauge">
+                  <div class="risk-gauge-track">
+                    <div id="risk-gauge-marker" class="risk-gauge-marker"></div>
+                  </div>
+                  <div class="risk-gauge-labels">
+                    <span>Low</span><span>Medium</span><span>High</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="result-section">
@@ -562,6 +577,21 @@
                   <div class="routing-flag-group result-tile">
                     <div class="result-label">Routing Flag</div>
                     <div id="case-detail-routing-flag" class="badge"></div>
+                  </div>
+                  <!-- Hidden by default - shown only when renderRiskSignal() (app.js)
+                       finds an explicit "overall risk is low/medium/high" phrase in the
+                       real Audit Summary text below. There is no separate structured risk
+                       score output today, so this never guesses: no match, no tile. -->
+                  <div id="case-detail-risk-signal-tile" class="result-tile risk-signal-tile" hidden>
+                    <div class="result-label">Automated Risk Signal</div>
+                    <div class="risk-gauge">
+                      <div class="risk-gauge-track">
+                        <div id="case-detail-risk-gauge-marker" class="risk-gauge-marker"></div>
+                      </div>
+                      <div class="risk-gauge-labels">
+                        <span>Low</span><span>Medium</span><span>High</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

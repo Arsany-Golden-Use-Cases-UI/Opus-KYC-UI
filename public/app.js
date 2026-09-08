@@ -1322,6 +1322,45 @@ function showFailure(data, elements = { panel: errorPanel, status: errorStatus, 
     : '<p>No specific failed node was reported. See server logs / the audit endpoint for detail.</p>';
 }
 
+// Best-effort extraction of an overall risk level from the real Audit
+// Summary text - there is no separate structured risk-score output today
+// (see the :root palette comment and buildProfileCard()'s own note that
+// the case file's schema isn't guaranteed), so this is the only place a
+// level could plausibly come from. Deliberately narrow: only matches
+// "overall risk is/level is/assessed as low|medium|high" specifically,
+// NOT a bare "risk is low" - a summary can mention several risk
+// sub-components (e.g. "sanctions risk is assessed as low") alongside
+// the overall one, and matching the first "risk is X" found would risk
+// picking up the wrong one. Returns null (never a guess) if that
+// specific phrase isn't present, which is what tells renderRiskSignal()
+// below to hide the gauge entirely rather than show a made-up reading.
+const OVERALL_RISK_PATTERN = /overall\s+risk(?:\s+(?:level|profile|score))?\s+(?:is|assessed\s+as)\s+(low|medium|high)\b/i;
+
+function extractOverallRiskLevel(auditSummary) {
+  if (typeof auditSummary !== 'string') return null;
+  const match = auditSummary.match(OVERALL_RISK_PATTERN);
+  return match ? match[1].toLowerCase() : null;
+}
+
+const RISK_LEVEL_MARKER_POSITION = { low: '12%', medium: '50%', high: '88%' };
+
+// tileEl/markerEl are the whole gauge tile and just its marker dot -
+// hides the entire tile (not just the marker) on no match, so a case
+// with no detectable level doesn't show an empty/misleading gauge shell.
+function renderRiskSignal(auditSummary, tileEl, markerEl) {
+  if (!tileEl || !markerEl) return;
+  const level = extractOverallRiskLevel(auditSummary);
+  if (!level) {
+    tileEl.hidden = true;
+    return;
+  }
+  markerEl.style.left = RISK_LEVEL_MARKER_POSITION[level];
+  const levelLabel = `Overall risk: ${humanizeLabel(level)}`;
+  markerEl.title = levelLabel;
+  markerEl.setAttribute('aria-label', levelLabel);
+  tileEl.hidden = false;
+}
+
 // `elements` defaults to New Intake's own results elements; the
 // case-detail panel's poll loop passes its own instead.
 function showResults(outputs, elements = {
@@ -1330,12 +1369,15 @@ function showResults(outputs, elements = {
   routingFlag: document.getElementById('routing-flag'),
   auditSummary: document.getElementById('audit-summary'),
   caseFile: document.getElementById('case-file'),
+  riskSignalTile: document.getElementById('risk-signal-tile'),
+  riskGaugeMarker: document.getElementById('risk-gauge-marker'),
 }) {
   elements.panel.hidden = false;
 
   setBadgeTone(elements.finalDecision, outputs.finalDecision);
   setBadgeTone(elements.routingFlag, outputs.routingFlag);
   elements.auditSummary.textContent = outputs.auditSummary ?? '—';
+  renderRiskSignal(outputs.auditSummary, elements.riskSignalTile, elements.riskGaugeMarker);
 
   const caseFileEl = elements.caseFile;
   caseFileEl.innerHTML = '';
@@ -1841,6 +1883,8 @@ function startCaseDetailPolling(jobId) {
           routingFlag: document.getElementById('case-detail-routing-flag'),
           auditSummary: document.getElementById('case-detail-audit-summary'),
           caseFile: document.getElementById('case-detail-case-file'),
+          riskSignalTile: document.getElementById('case-detail-risk-signal-tile'),
+          riskGaugeMarker: document.getElementById('case-detail-risk-gauge-marker'),
         });
       } else if (['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(data.status)) {
         stopCaseDetailPolling();
