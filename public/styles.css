@@ -602,6 +602,20 @@ img {
   font-size: 0.92rem;
 }
 
+/* Page-header subtitles (Case Detail, Case Queue, Pending Reviews, Reports,
+   Settings - the <p class="subtitle"> right under a page's <h1
+   class="page-title">) sit directly inside .view-panel, which already
+   spaces its children with its own `gap: 1.25rem` (see .view-panel above).
+   .subtitle's own margin-bottom above stacks on top of that gap - margins
+   and flex `gap` don't collapse - so without this override the space
+   between the subtitle and whatever comes next (here, the Case Detail
+   result cards) ends up close to double what it should be. Scoped to a
+   direct child so the smaller subtitles nested inside plain (non-gap)
+   .card notices elsewhere keep their own spacing. */
+.view-panel > .subtitle {
+  margin-bottom: 0;
+}
+
 .page-footer {
   padding: 0.5rem 0 0;
   font-size: 0.8rem;
@@ -1095,7 +1109,6 @@ input:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
-  margin: 1rem 0 1.5rem;
 }
 
 /* Result panel layout wrapper (RENAMED from .results-card 2026-09-08,
