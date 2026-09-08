@@ -489,6 +489,17 @@ img {
   max-width: 1600px;
 }
 
+/* Case Detail (2026-09-08): same problem/same fix as Case Queue above -
+   at typical desktop widths, .content's normal 1180px cap left a wide
+   band of unused page background to the right of the inputs/outcome
+   columns, and the Case Inputs review-field-grid (Applicant/Contact/
+   Employment/Account & Compliance) had room for more columns per row
+   than the cramped card gave it. Widened to match Queue's cap exactly
+   rather than inventing a third value. */
+.content:has(> [data-view-panel="casedetail"]:not([hidden])) {
+  max-width: 1600px;
+}
+
 /* Each sidebar tab's content area. Deliberately no [hidden] override here
    like .app-view/.status-banner above got - this rule sets no `display`
    of its own (block is the plain <section> default), so the UA
