@@ -1796,7 +1796,9 @@ details summary {
   background: var(--color-surface-muted);
 }
 
-/* ---------- Pending Reviews ---------- */
+/* ---------- Review Log (RENAMED 2026-09-09 from "Pending Reviews" -
+   now lists completed reviews alongside pending ones, see app.js's
+   renderPendingReviews()) ---------- */
 
 .review-queue-list {
   display: flex;
@@ -1825,6 +1827,20 @@ details summary {
   transform: translateY(-1px);
 }
 
+/* Title + Pending/Approved/Rejected badge on one line (ADDED 2026-09-09,
+   for the completed-review cards the Review Log now also shows). */
+.review-queue-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.review-queue-card-top .review-queue-card-title {
+  margin-bottom: 0;
+}
+
 .review-queue-card-title {
   font-family: "Prompt", sans-serif;
   font-weight: 500;
@@ -1837,6 +1853,15 @@ details summary {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--color-text-muted);
+}
+
+/* Reviewer attribution line under the Comments block on the read-only
+   Review Detail panel (ADDED 2026-09-09). */
+.review-detail-byline {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  text-align: right;
 }
 
 /* ---------- Reports breakdown blocks ---------- */

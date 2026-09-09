@@ -81,12 +81,26 @@
           </button>
           <button type="button" class="nav-item" data-view="pending" data-roles="manager">
             <span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
-            <span class="nav-item-label">Pending Reviews</span>
-            <!-- Hidden until refreshPendingReviewsBadge() (app.js) has a
-                 real count and the signed-in role is a Compliance Officer
-                 - a KYC Agent never sees this nav item at all (see
-                 data-roles above, enforced by applyRoleRestrictions()),
-                 so the badge never needs to handle that case. -->
+            <!-- RENAMED 2026-09-09 from "Pending Reviews" - the tab (and
+                 the [data-view-panel="pending"] panel below) now lists
+                 every case that has ever gone to human review, pending or
+                 completed, not just the ones still awaiting a decision.
+                 data-view/element ids left as "pending" throughout the
+                 codebase (nav-item, panel, renderPendingReviews(), etc.) -
+                 only user-facing copy changed, to keep this change scoped
+                 and low-risk. -->
+            <span class="nav-item-label">Review Log</span>
+            <!-- Still specifically the PENDING count (cases needing a
+                 decision right now), not the total review count - see
+                 refreshPendingReviewsBadge()/setPendingReviewsBadgeCount()
+                 in app.js. That's deliberate: this badge is an action-item
+                 signal ("N cases need you"), not a size-of-the-list count -
+                 a completed review needs no attention, so counting it here
+                 would make the badge a less useful summons. Hidden until a
+                 real count exists and the signed-in role is a Compliance
+                 Officer - a KYC Agent never sees this nav item at all (see
+                 data-roles above, enforced by applyRoleRestrictions()), so
+                 the badge never needs to handle that case. -->
             <span id="pending-reviews-badge" class="nav-badge" hidden>0</span>
           </button>
           <button type="button" class="nav-item" data-view="queue" data-roles="agent,manager">
@@ -685,16 +699,55 @@
           </div>
         </section>
 
-        <!-- ============== Pending Reviews (real data, filtered client-side from
-             /api/case-history for status === "WAITING_REVIEW"; manager-only -
-             see data-roles on the sidebar button). Each card opens that job's
-             review form via loadAndShowReview() in app.js. ============== -->
+        <!-- ============== Review Log (RENAMED 2026-09-09 from "Pending
+             Reviews" - real data, from /api/case-history, filtered
+             client-side to any case that has ever gone to human review:
+             status === "WAITING_REVIEW" (still needs a decision) or a saved
+             .reviewRecord (already decided - see server.js's POST
+             /api/run/:id/review, which is what actually saves one).
+             Manager-only, see data-roles on the sidebar button. A pending
+             card opens the live review form (loadAndShowReview(), same as
+             before); a completed card opens the read-only detail panel
+             below instead (openReviewLogDetail() in app.js).
+             data-view-panel/element ids kept as "pending" - see the
+             sidebar comment above. ============== -->
         <section class="view-panel" data-view-panel="pending" hidden>
-          <p class="card-eyebrow">Banking KYC / Pending Reviews</p>
-          <h1 class="page-title">Pending reviews</h1>
-          <p class="subtitle">Cases currently paused for a Compliance Officer decision. Click a case to open its review form.</p>
+          <p class="card-eyebrow">Banking KYC / Review Log</p>
+          <h1 class="page-title">Review log</h1>
+          <p class="subtitle">Every case sent for a Compliance Officer decision, pending or completed. Click a case to open it.</p>
 
           <div id="pending-reviews-list" class="review-queue-list"></div>
+        </section>
+
+        <!-- ============== Review Detail (standalone panel - no sidebar nav
+             item of its own, ADDED 2026-09-09). Read-only view of an
+             already-completed review, reached by clicking a completed card
+             on the Review Log tab (see openReviewLogDetail() in app.js).
+             Deliberately separate from #review-panel above, which is the
+             live, editable Approve/Reject form for a review still awaiting
+             a decision - this one only ever displays a saved decision, it
+             can never submit one. ============== -->
+        <section class="view-panel review-wide" data-view-panel="reviewlogdetail" hidden>
+          <section class="card review-card">
+            <p class="card-eyebrow">Banking KYC / Review Log</p>
+            <h2 class="card-title" id="reviewlog-detail-title">Review</h2>
+            <p class="subtitle" id="reviewlog-detail-subtitle"></p>
+
+            <div class="field">
+              <label>Decision</label>
+              <div id="reviewlog-detail-decision" class="badge badge-lg"></div>
+            </div>
+
+            <div class="field">
+              <label>Comments</label>
+              <div id="reviewlog-detail-comments" class="review-prose"></div>
+            </div>
+
+            <div class="field">
+              <label>Case Details</label>
+              <div id="reviewlog-detail-inputs" class="settings-grid review-inputs"></div>
+            </div>
+          </section>
         </section>
 
         <!-- ============== Reports (real data, computed client-side from

@@ -236,7 +236,9 @@ const pendingReviewsBadge = document.getElementById('pending-reviews-badge');
 const VIEW_TITLES = {
   queue: 'Case Queue',
   intake: 'New Intake',
-  pending: 'Pending Reviews',
+  // RENAMED 2026-09-09 from "Pending Reviews" - see the sidebar/panel
+  // comments in index.html for why the key itself stayed "pending".
+  pending: 'Review Log',
   reports: 'Reports',
   settings: 'Settings',
   // No sidebar nav item of its own - see the [data-view-panel="review"]
@@ -245,6 +247,9 @@ const VIEW_TITLES = {
   // Same as above - see the [data-view-panel="casedetail"] comment in
   // index.html.
   casedetail: 'Case Detail',
+  // Same as above - see the [data-view-panel="reviewlogdetail"] comment in
+  // index.html. Reached only from a completed card on the Review Log tab.
+  reviewlogdetail: 'Review Detail',
 };
 
 // Each tab's data is fetched/rendered once, the first time it's opened,
@@ -2205,6 +2210,19 @@ async function renderCaseTable(tableWrapId, statsContainerId) {
   });
 })();
 
+// BROADENED 2026-09-09 - was "pending reviews only" (status ===
+// "WAITING_REVIEW"). Now the single Review Log: every case that has ever
+// gone to human review, whether it's still waiting on a Compliance
+// Officer or already decided. A completed one only shows up here if its
+// decision was actually saved - see server.js's POST /api/run:id/review
+// for where .reviewRecord is written; a review submitted before that
+// existed has no record to show and simply won't appear once it drops off
+// WAITING_REVIEW, same as it would have before this change.
+//
+// Pending cases are listed first (they need someone's attention) with the
+// existing card style; completed ones follow, each carrying its
+// Approved/Rejected badge - both groups already come back newest-first
+// from fetchCaseHistory(), so within each group order is preserved.
 async function renderPendingReviews() {
   const wrap = document.getElementById('pending-reviews-list');
   if (!wrap) return;
@@ -2213,15 +2231,17 @@ async function renderPendingReviews() {
   try {
     const entries = await fetchCaseHistory();
     const pending = entries.filter((e) => e.status === 'WAITING_REVIEW');
+    const completed = entries.filter((e) => e.status !== 'WAITING_REVIEW' && e.reviewRecord);
     // Reuses this fetch rather than calling refreshPendingReviewsBadge()
-    // (which would fetch a second time) - same count, same source.
+    // (which would fetch a second time) - same count, same source. Still
+    // the pending count only - see the badge's own comment in index.html.
     setPendingReviewsBadgeCount(pending.length);
     wrap.innerHTML = '';
 
-    if (!pending.length) {
+    if (!pending.length && !completed.length) {
       const empty = document.createElement('div');
       empty.className = 'data-table-empty';
-      empty.textContent = 'No cases are currently awaiting review.';
+      empty.textContent = 'No cases have been sent for review yet.';
       wrap.appendChild(empty);
       return;
     }
@@ -2232,22 +2252,57 @@ async function renderPendingReviews() {
       card.className = 'review-queue-card';
       card.dataset.jobId = entry.jobId;
 
+      const top = document.createElement('div');
+      top.className = 'review-queue-card-top';
       const title = document.createElement('div');
       title.className = 'review-queue-card-title';
       title.textContent = entry.applicantName || entry.title || `Case ${entry.jobId}`;
+      const badge = document.createElement('span');
+      badge.className = 'badge tone-yellow';
+      badge.textContent = 'Pending';
+      top.append(title, badge);
 
       const meta = document.createElement('div');
       meta.className = 'review-queue-card-meta';
       meta.textContent = `Case ${entry.jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
 
-      card.appendChild(title);
+      card.appendChild(top);
       card.appendChild(meta);
 
       card.addEventListener('click', () => openPendingReview(entry.jobId));
       wrap.appendChild(card);
     });
+
+    completed.forEach((entry) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'review-queue-card';
+      card.dataset.jobId = entry.jobId;
+
+      const top = document.createElement('div');
+      top.className = 'review-queue-card-top';
+      const title = document.createElement('div');
+      title.className = 'review-queue-card-title';
+      title.textContent = entry.applicantName || entry.title || `Case ${entry.jobId}`;
+      const badge = document.createElement('span');
+      badge.className = `badge ${entry.reviewRecord.canApprove ? 'tone-green' : 'tone-pink'}`;
+      badge.textContent = entry.reviewRecord.canApprove ? 'Approved' : 'Rejected';
+      top.append(title, badge);
+
+      const meta = document.createElement('div');
+      meta.className = 'review-queue-card-meta';
+      let metaText = `Case ${entry.jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
+      if (entry.reviewRecord.reviewedBy) metaText += ` · Reviewed by ${entry.reviewRecord.reviewedBy}`;
+      meta.textContent = metaText;
+
+      card.appendChild(top);
+      card.appendChild(meta);
+
+      card.addEventListener('click', () => openReviewLogDetail(entry));
+      wrap.appendChild(card);
+    });
   } catch (err) {
-    wrap.textContent = 'Could not load pending reviews.';
+    wrap.textContent = 'Could not load the review log.';
   }
 }
 
@@ -2266,6 +2321,54 @@ async function openPendingReview(jobId) {
     console.error('open pending review error', err);
     renderPendingReviews();
   }
+}
+
+// ADDED 2026-09-09. Read-only counterpart to loadAndShowReview() above -
+// renders an already-decided review from its saved .reviewRecord (case
+// history, not a live Opus dispatch - there is no live dispatch left for a
+// completed review, see server.js's POST /api/run/:id/review). Everything
+// needed is already sitting on `entry` (the Review Log card that was
+// clicked), no extra fetch required.
+function openReviewLogDetail(entry) {
+  const record = entry.reviewRecord;
+  if (!record) return;
+
+  document.getElementById('reviewlog-detail-title').textContent =
+    entry.applicantName || entry.title || `Case ${entry.jobId}`;
+
+  let subtitle = `Case ${entry.jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
+  if (record.reviewedAt) subtitle += ` · Reviewed ${formatTimestamp(record.reviewedAt)}`;
+  document.getElementById('reviewlog-detail-subtitle').textContent = subtitle;
+
+  const decisionEl = document.getElementById('reviewlog-detail-decision');
+  decisionEl.className = `badge badge-lg ${record.canApprove ? 'tone-green' : 'tone-pink'}`;
+  decisionEl.textContent = record.canApprove ? 'Approved' : 'Rejected';
+
+  const commentsEl = document.getElementById('reviewlog-detail-comments');
+  commentsEl.innerHTML = '';
+  const commentsText = (record.comments || '').trim();
+  if (commentsText) {
+    commentsEl.appendChild(renderProseValue(commentsText));
+  } else {
+    const p = document.createElement('p');
+    p.textContent = 'No comments were left with this decision.';
+    commentsEl.appendChild(p);
+  }
+  if (record.reviewedBy) {
+    const byLine = document.createElement('p');
+    byLine.className = 'review-detail-byline';
+    byLine.textContent = `— ${record.reviewedBy}`;
+    commentsEl.appendChild(byLine);
+  }
+
+  // Same renderer the live review form and Case Detail both already use
+  // (see its own comment above) - reviewRecord.inputs was saved in the
+  // exact same {value, type, label} shape labelInputs() always produces,
+  // so it gets identical readable JSON-tree/prose treatment here, no
+  // special-casing needed.
+  renderReviewInputs(record.inputs || {}, 'reviewlog-detail-inputs');
+
+  switchToView('reviewlogdetail');
 }
 
 // ============================================================

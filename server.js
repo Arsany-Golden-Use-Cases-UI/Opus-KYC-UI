@@ -843,16 +843,62 @@ app.post('/api/run/:id/review', async (req, res) => {
 
     pendingReviewDispatches.delete(jobId);
 
+    // Persist the full review record (ADDED 2026-09-09) - previously,
+    // everything in `dispatch` (the case context the reviewer actually saw)
+    // was discarded the moment this handler finished, since
+    // pendingReviewDispatches is in-memory only. Only {status, reviewedBy}
+    // ever reached durable storage, so a completed review had nothing to
+    // show for itself afterward beyond "someone reviewed it". The Review
+    // Log tab (public/app.js's renderPendingReviews()/openReviewLogDetail())
+    // needs the actual decision to display, so it's captured here, once,
+    // right before the in-memory copy is gone for good.
+    //
+    // Reuses labelInputs() rather than the already-labeled data GET
+    // /api/run/:id/review returned earlier in this review's lifecycle -
+    // that response was never persisted either, and this handler only has
+    // dispatch.inputs (the raw, unlabeled form) to work with. Same
+    // best-effort labeling as every other labelInputs() call site: a
+    // slow/failed workflow-schema fetch degrades to unlabeled keys, never
+    // fails the review submission itself.
+    let reviewRecord = null;
+    try {
+      reviewRecord = {
+        inputs: await labelInputs(dispatch.inputs || {}),
+        workflowName: dispatch.workflowName || null,
+        canApprove,
+        comments: comments || '',
+        reviewedBy: reviewedBy || null,
+        reviewedAt: new Date().toISOString(),
+      };
+    } catch (recordErr) {
+      // Labeling failed outright (vs. labelInputs()'s own internal
+      // best-effort fallback for just the label fetch) - fall back to the
+      // raw unlabeled inputs rather than losing the review record entirely.
+      console.error('review record build error', recordErr);
+      reviewRecord = {
+        inputs: dispatch.inputs || {},
+        workflowName: dispatch.workflowName || null,
+        canApprove,
+        comments: comments || '',
+        reviewedBy: reviewedBy || null,
+        reviewedAt: new Date().toISOString(),
+      };
+    }
+
     // Clear the awaiting-review state back to a normal in-progress status
     // now that a decision has been submitted, so the case drops off the
-    // Pending Reviews list. jobId here is req.params.id, which the
-    // frontend always populates from the same jobExecutionId it polls
-    // with - the correct case-history key, unlike the dispatch's own
-    // execution_id (see the webhook handler above).
+    // "needs a decision" half of the Review Log. jobId here is
+    // req.params.id, which the frontend always populates from the same
+    // jobExecutionId it polls with - the correct case-history key, unlike
+    // the dispatch's own execution_id (see the webhook handler above).
     try {
       // Required client-side at the role gate, same as ranBy above - null
-      // only on a review submitted before this field existed.
-      await updateHistoryEntry(jobId, { status: 'IN_PROGRESS', reviewedBy: reviewedBy || null });
+      // only on a review submitted before this field existed. reviewRecord
+      // is likewise absent (undefined, i.e. omitted once JSON-serialized)
+      // only for reviews submitted before this existed - the Review Log
+      // treats that the same as a case that was never reviewed at all,
+      // since there's genuinely nothing saved to show for it.
+      await updateHistoryEntry(jobId, { status: 'IN_PROGRESS', reviewedBy: reviewedBy || null, reviewRecord });
     } catch (historyErr) {
       console.error('case history update error (review submit)', historyErr);
     }
