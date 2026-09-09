@@ -1683,26 +1683,51 @@ async function fetchCaseHistory() {
   return Array.isArray(data.entries) ? data.entries : [];
 }
 
-function renderQueueStats(containerId, entries) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-
+// The three states the stat tiles, the status bar, and the breakdown
+// donut all read from - one place computing "completed / in progress /
+// failed" so the three visuals can never disagree with each other. Same
+// bucketing renderQueueStats() used before this got split out: total is
+// every entry, failed/cancelled is anything that isn't IN_PROGRESS,
+// COMPLETED, or the synthetic WAITING_REVIEW value (that one has no
+// bucket of its own here, same as before - it just doesn't currently
+// come up in the counts, since nothing sums these three back to total).
+function computeQueueStatusCounts(entries) {
   const total = entries.length;
   const inProgress = entries.filter((e) => e.status === 'IN_PROGRESS').length;
   const completed = entries.filter((e) => e.status === 'COMPLETED').length;
   const failed = entries.filter((e) => e.status && e.status !== 'IN_PROGRESS' && e.status !== 'COMPLETED' && e.status !== 'WAITING_REVIEW').length;
+  return { total, inProgress, completed, failed };
+}
+
+// Green/blue/dark - reused as-is from elsewhere in the app (the risk
+// gauge and the Approved checkmark use the same green, --color-blue is
+// the one accent color everywhere else, and var(--color-text) is the
+// same dark ink used for high-emphasis fills like the Approved tile).
+// Deliberately inline rather than global tokens, same reasoning
+// .badge-lg.tone-green and the risk gauge gradient already used - this
+// is the one other place these three get to mean "status identity" in a
+// chart, not "positive/negative" the way badges use color.
+const QUEUE_STATUS_COLORS = {
+  completed: '#57d873',
+  inProgress: 'var(--color-blue)',
+  failed: 'var(--color-text)',
+};
+
+function renderQueueStatTiles(containerId, counts) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
 
   const tiles = [
-    { label: 'Total Cases', value: total },
-    { label: 'In Progress', value: inProgress },
-    { label: 'Completed', value: completed },
-    { label: 'Failed / Cancelled', value: failed },
+    { label: 'Total Cases', value: counts.total, accent: 'neutral' },
+    { label: 'In Progress', value: counts.inProgress, accent: 'blue' },
+    { label: 'Completed', value: counts.completed, accent: 'green' },
+    { label: 'Failed / Cancelled', value: counts.failed, accent: 'neutral' },
   ];
 
   el.innerHTML = '';
   tiles.forEach((tile) => {
     const div = document.createElement('div');
-    div.className = 'stat-tile';
+    div.className = `stat-tile stat-tile--accent-${tile.accent}`;
     const label = document.createElement('div');
     label.className = 'stat-tile-label';
     label.textContent = tile.label;
@@ -1715,22 +1740,247 @@ function renderQueueStats(containerId, entries) {
   });
 }
 
+// Proportional green/blue/dark segments, left to right in the same order
+// as the legend below. A count-less state (e.g. no failed cases at all)
+// just contributes a 0-width segment rather than a gap - no total means
+// no bar at all (an empty case history), not a broken one.
+function renderQueueStatusBar(containerId, counts) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  if (!counts.total) return;
+
+  [
+    ['completed', counts.completed],
+    ['inProgress', counts.inProgress],
+    ['failed', counts.failed],
+  ].forEach(([key, value]) => {
+    if (!value) return;
+    const seg = document.createElement('div');
+    seg.className = 'queue-status-bar-segment';
+    seg.style.background = QUEUE_STATUS_COLORS[key];
+    seg.style.width = `${(value / counts.total) * 100}%`;
+    el.appendChild(seg);
+  });
+}
+
+// A ring built from one <circle> per segment (stroke-dasharray to draw
+// only that segment's arc length, stroke-dashoffset to rotate it into
+// place after whatever came before it), starting at 12 o'clock via the
+// -90deg rotation on each. A thin 1.5% gap between segments keeps
+// adjacent same-ish-lightness colors visually separable up close, same
+// spacer intent the dataviz skill's mark spec calls for on stacked bars.
+function buildQueueDonutSvg(counts) {
+  const size = 120;
+  const strokeWidth = 14;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const gap = counts.total ? circumference * 0.015 : 0;
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.classList.add('queue-donut-svg');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${counts.completed} completed, ${counts.inProgress} in progress, ${counts.failed} failed, out of ${counts.total} total cases`);
+
+  const track = document.createElementNS(svgNS, 'circle');
+  track.setAttribute('cx', String(size / 2));
+  track.setAttribute('cy', String(size / 2));
+  track.setAttribute('r', String(radius));
+  track.setAttribute('fill', 'none');
+  track.setAttribute('stroke', 'var(--color-surface-muted)');
+  track.setAttribute('stroke-width', String(strokeWidth));
+  svg.appendChild(track);
+
+  let cumulative = 0;
+  [
+    ['completed', counts.completed],
+    ['inProgress', counts.inProgress],
+    ['failed', counts.failed],
+  ].forEach(([key, value]) => {
+    if (!value || !counts.total) return;
+    const share = value / counts.total;
+    const arcLength = Math.max(share * circumference - gap, 0);
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', String(size / 2));
+    circle.setAttribute('cy', String(size / 2));
+    circle.setAttribute('r', String(radius));
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', QUEUE_STATUS_COLORS[key]);
+    circle.setAttribute('stroke-width', String(strokeWidth));
+    circle.setAttribute('stroke-linecap', 'round');
+    circle.setAttribute('stroke-dasharray', `${arcLength} ${circumference - arcLength}`);
+    circle.setAttribute('stroke-dashoffset', String(-cumulative));
+    circle.setAttribute('transform', `rotate(-90 ${size / 2} ${size / 2})`);
+    svg.appendChild(circle);
+    cumulative += share * circumference;
+  });
+
+  return svg;
+}
+
+function buildQueueLegendRow(color, label, value, total) {
+  const row = document.createElement('div');
+  row.className = 'queue-legend-row';
+
+  const dot = document.createElement('span');
+  dot.className = 'queue-legend-dot';
+  dot.style.background = color;
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'queue-legend-label';
+  labelEl.textContent = label;
+
+  const pctEl = document.createElement('span');
+  pctEl.className = 'queue-legend-pct';
+  pctEl.textContent = total ? `${Math.round((value / total) * 100)}%` : '\u2014';
+
+  const countEl = document.createElement('span');
+  countEl.className = 'queue-legend-count';
+  countEl.textContent = String(value);
+
+  row.append(dot, labelEl, pctEl, countEl);
+  return row;
+}
+
+function renderQueueBreakdown(containerId, counts) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+
+  const donutWrap = document.createElement('div');
+  donutWrap.className = 'queue-donut-wrap';
+  donutWrap.appendChild(buildQueueDonutSvg(counts));
+
+  const center = document.createElement('div');
+  center.className = 'queue-donut-center';
+  const centerValue = document.createElement('div');
+  centerValue.className = 'queue-donut-center-value';
+  centerValue.textContent = String(counts.total);
+  const centerLabel = document.createElement('div');
+  centerLabel.className = 'queue-donut-center-label';
+  centerLabel.textContent = 'total';
+  center.append(centerValue, centerLabel);
+  donutWrap.appendChild(center);
+
+  const legend = document.createElement('div');
+  legend.className = 'queue-legend';
+  legend.appendChild(buildQueueLegendRow(QUEUE_STATUS_COLORS.completed, 'Completed', counts.completed, counts.total));
+  legend.appendChild(buildQueueLegendRow(QUEUE_STATUS_COLORS.inProgress, 'In progress', counts.inProgress, counts.total));
+  legend.appendChild(buildQueueLegendRow(QUEUE_STATUS_COLORS.failed, 'Failed', counts.failed, counts.total));
+
+  el.append(donutWrap, legend);
+}
+
+function renderQueueOverview(statsContainerId, barContainerId, breakdownContainerId, entries) {
+  const counts = computeQueueStatusCounts(entries);
+  renderQueueStatTiles(statsContainerId, counts);
+  renderQueueStatusBar(barContainerId, counts);
+  renderQueueBreakdown(breakdownContainerId, counts);
+}
+
+// Search box + status filter pills above the table - both act on the
+// same cached entries so switching one never has to refetch, and both
+// reset (see renderCaseTable()) whenever the Case Queue view is opened
+// fresh rather than persisting across navigation, same as the rest of
+// this app's per-view state.
+const QUEUE_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'IN_PROGRESS', label: 'In progress' },
+  { key: 'COMPLETED', label: 'Completed' },
+  { key: 'FAILED', label: 'Failed' },
+];
+
+let queueEntriesCache = [];
+let queueStatusFilter = 'all';
+let queueSearchTerm = '';
+
+function queueEntryMatchesFilter(entry, filterKey) {
+  if (filterKey === 'all') return true;
+  if (filterKey === 'FAILED') {
+    return Boolean(entry.status) && entry.status !== 'IN_PROGRESS' && entry.status !== 'COMPLETED' && entry.status !== 'WAITING_REVIEW';
+  }
+  return entry.status === filterKey;
+}
+
+function renderQueueFilterButtons() {
+  const el = document.getElementById('queue-filter-buttons');
+  if (!el) return;
+  el.innerHTML = '';
+  QUEUE_FILTERS.forEach((filter) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'filter-pill' + (queueStatusFilter === filter.key ? ' filter-pill--active' : '');
+    btn.textContent = filter.label;
+    btn.addEventListener('click', () => {
+      if (queueStatusFilter === filter.key) return;
+      queueStatusFilter = filter.key;
+      renderQueueFilterButtons();
+      renderQueueTableFromCache();
+    });
+    el.appendChild(btn);
+  });
+}
+
+function renderQueueTableFromCache() {
+  const wrap = document.getElementById('queue-table-wrap');
+  if (!wrap) return;
+
+  const term = queueSearchTerm.trim().toLowerCase();
+  const filtered = queueEntriesCache.filter((entry) => {
+    if (!queueEntryMatchesFilter(entry, queueStatusFilter)) return false;
+    if (!term) return true;
+    const haystack = `${entry.applicantName || ''} ${entry.title || ''} ${entry.jobId || ''}`.toLowerCase();
+    return haystack.includes(term);
+  });
+
+  const emptyMessage = queueEntriesCache.length
+    ? 'No cases match your search or filter.'
+    : 'No cases have been run through this console yet.';
+
+  wrap.innerHTML = '';
+  wrap.appendChild(buildDataTable(CASE_TABLE_COLUMNS, filtered, emptyMessage, openCaseDetail));
+}
+
 async function renderCaseTable(tableWrapId, statsContainerId) {
   const wrap = document.getElementById(tableWrapId);
   if (!wrap) return;
   wrap.textContent = 'Loading\u2026';
 
+  // Fresh view of the queue resets search/filter, same as any other
+  // per-view state elsewhere in the app - it's a summary of "what's here
+  // right now", not a saved query.
+  queueStatusFilter = 'all';
+  queueSearchTerm = '';
+  const searchInput = document.getElementById('queue-search');
+  if (searchInput) searchInput.value = '';
+  renderQueueFilterButtons();
+
   try {
-    const entries = await fetchCaseHistory();
-    wrap.innerHTML = '';
-    wrap.appendChild(
-      buildDataTable(CASE_TABLE_COLUMNS, entries, 'No cases have been run through this console yet.', openCaseDetail)
-    );
-    if (statsContainerId) renderQueueStats(statsContainerId, entries);
+    queueEntriesCache = await fetchCaseHistory();
+    renderQueueTableFromCache();
+    if (statsContainerId) {
+      renderQueueOverview(statsContainerId, 'queue-status-bar', 'queue-breakdown', queueEntriesCache);
+    }
   } catch (err) {
     wrap.textContent = 'Could not load case history.';
   }
 }
+
+// Wired once at load - #queue-search is static markup, not rebuilt per
+// view switch, unlike the filter pills (which do need rebuilding, since
+// their active state depends on queueStatusFilter).
+(function initQueueSearch() {
+  const input = document.getElementById('queue-search');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    queueSearchTerm = input.value;
+    renderQueueTableFromCache();
+  });
+})();
 
 async function renderPendingReviews() {
   const wrap = document.getElementById('pending-reviews-list');

@@ -106,6 +106,22 @@
 
           <div id="queue-stats" class="stat-tile-row"></div>
 
+          <!-- Proportional green/blue/dark segments of the same three
+               counts as the stat tiles above and the donut below - see
+               renderQueueOverview() in app.js, the one place all three
+               of these read from. -->
+          <div id="queue-status-bar" class="queue-status-bar"></div>
+
+          <div class="card">
+            <h2 class="card-title">Status breakdown</h2>
+            <div id="queue-breakdown" class="queue-breakdown"></div>
+          </div>
+
+          <div class="queue-toolbar">
+            <input id="queue-search" type="search" class="queue-search-input" placeholder="Search applicant">
+            <div id="queue-filter-buttons" class="filter-pill-row"></div>
+          </div>
+
           <div class="card table-card">
             <div id="queue-table-wrap"></div>
           </div>

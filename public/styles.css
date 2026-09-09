@@ -683,6 +683,7 @@ input[type="email"],
 input[type="tel"],
 input[type="number"],
 input[type="date"],
+input[type="search"],
 select,
 textarea {
   width: 100%;
@@ -1444,6 +1445,159 @@ details summary {
 .stat-tile-desc {
   font-size: 0.78rem;
   color: var(--color-text-muted);
+}
+
+/* ---------- Case Queue overview: accented stat tiles, status bar,
+   breakdown donut, search/filter toolbar - ADDED 2026-09-09, matching a
+   reference design Arsany shared. Green/blue/dark reused as-is from
+   elsewhere (risk gauge, --color-blue, --color-text) - see
+   QUEUE_STATUS_COLORS in app.js, the one place that assigns them. ---------- */
+
+.stat-tile--accent-blue {
+  border-top: 3px solid var(--color-blue);
+}
+
+.stat-tile--accent-green {
+  border-top: 3px solid #57d873;
+}
+
+.stat-tile--accent-neutral {
+  border-top: 3px solid var(--color-text);
+}
+
+.queue-status-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.queue-status-bar-segment {
+  height: 100%;
+}
+
+.queue-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.queue-donut-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+}
+
+.queue-donut-svg {
+  display: block;
+}
+
+.queue-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.queue-donut-center-value {
+  font-family: "Prompt", sans-serif;
+  font-weight: 600;
+  font-size: 1.5rem;
+  color: var(--color-text);
+}
+
+.queue-donut-center-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.queue-legend {
+  flex: 1;
+  min-width: 200px;
+}
+
+.queue-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.65rem;
+}
+
+.queue-legend-row:last-child {
+  margin-bottom: 0;
+}
+
+.queue-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.queue-legend-label {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.queue-legend-pct {
+  width: 48px;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.queue-legend-count {
+  width: 32px;
+  text-align: right;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.queue-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Joins the shared input[type="..."] rule's selector list further up
+   this file (border/padding/radius/font) rather than repeating those -
+   only the width needs overriding here, since that rule's width: 100%
+   is meant for a full-width form field, not a flex item sharing a row
+   with the filter pills. */
+.queue-search-input {
+  flex: 1 1 220px;
+  width: auto;
+}
+
+.filter-pill-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.82rem;
+  font-family: inherit;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.filter-pill--active {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: #ffffff;
 }
 
 /* ---------- Data tables (Case Queue) ---------- */
