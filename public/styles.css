@@ -1905,6 +1905,126 @@ details summary {
   color: var(--color-text);
 }
 
+/* ---------- Reports: date-range picker, trend deltas, case-volume chart
+   - ADDED 2026-09-09. Automation Outcome itself moved from .report-row's
+   three flat bars above to the .queue-donut-*/.queue-legend-* components
+   Case Queue already established (see buildReportsBreakdown() in app.js),
+   reused as-is for visual consistency; only the pieces below are new. */
+
+.reports-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Direct-child override the same way .view-panel > .subtitle above
+   handles every other page's title/subtitle pair - here the subtitle is
+   nested one level deeper (inside .reports-header-row's own wrapper div,
+   next to the range <select>), so that existing selector doesn't reach it
+   and needs this one instead. */
+.reports-header-row .subtitle {
+  margin-bottom: 0;
+}
+
+.reports-range-select {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.5rem 2rem 0.5rem 0.8rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='%23959595' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+}
+
+.reports-range-select:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 1px;
+}
+
+/* Real vs.-previous-period delta line under each stat tile's value - see
+   buildTrendHtml() in app.js. --good is green regardless of whether the
+   underlying number went up or down (more cases handled and a faster
+   turnaround are both "good", so the favorable direction is decided per
+   metric in app.js, not just by arrow sign); --neutral covers an
+   unfavorable change and the no-prior-data / no-change cases alike,
+   deliberately reusing the same muted gray rather than red (no red
+   anywhere in this palette, see :root's own comment at the top of this
+   file). */
+.stat-tile-trend {
+  font-size: 0.76rem;
+  font-weight: 700;
+  margin-top: 0.3rem;
+}
+
+.stat-tile-trend--good {
+  color: #1a9c53;
+}
+
+.stat-tile-trend--neutral {
+  color: var(--color-text-muted);
+}
+
+.stat-tile-trend-note {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.trend-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.9rem;
+  height: 120px;
+  padding: 0.5rem 0.25rem 0;
+}
+
+.trend-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 0.4rem;
+}
+
+.trend-bar {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-blue);
+}
+
+/* The most recent (rightmost, current/partial) week reads as "still
+   filling in" rather than a finished bar tied with the others - same
+   dark-ink-for-emphasis convention used elsewhere (e.g. .stat-tile-value)
+   rather than a fourth chart color. */
+.trend-bar--current {
+  background: var(--color-text);
+}
+
+.trend-bar-value {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.trend-bar-label {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 /* ---------- Settings ---------- */
 
 .settings-card-title {

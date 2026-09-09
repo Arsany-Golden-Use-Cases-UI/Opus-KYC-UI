@@ -698,14 +698,43 @@
         </section>
 
         <!-- ============== Reports (real data, computed client-side from
-             /api/case-history - see renderReports() in app.js) ============== -->
+             /api/case-history - see renderReports()/renderReportsContent()
+             in app.js) ============== -->
         <section class="view-panel" data-view-panel="reports" hidden>
           <p class="card-eyebrow">Banking KYC / Reports</p>
-          <h1 class="page-title">Management information</h1>
-          <p class="subtitle">This calendar month, computed from real case history.</p>
+
+          <div class="reports-header-row">
+            <div>
+              <h1 class="page-title">Management information</h1>
+              <p class="subtitle" id="reports-subtitle">This calendar month, computed from real case history.</p>
+            </div>
+            <!-- Was fixed to "this calendar month" only - see
+                 getReportsRangeBounds() in app.js for the three windows
+                 this drives, each paired with the immediately preceding
+                 equal-length window so the stat tiles below can show a
+                 real vs.-last-period trend instead of a bare snapshot. -->
+            <select id="reports-range-select" class="reports-range-select">
+              <option value="thisMonth">This calendar month</option>
+              <option value="lastMonth">Last calendar month</option>
+              <option value="last90">Last 90 days</option>
+            </select>
+          </div>
 
           <div id="reports-stats" class="stat-tile-row"></div>
+
+          <!-- Automation Outcome as a donut+legend (reusing the Case
+               Queue breakdown's visual language, see buildReportsBreakdown()
+               in app.js) instead of three separately-weighted bars, so the
+               Approved/Human Review/Rejected split reads as one proportional
+               chart at a glance. -->
           <div id="reports-breakdowns" class="report-grid"></div>
+
+          <!-- Real per-week case counts from the same case history above,
+               not sample data - see computeWeeklyCaseVolume() in app.js. -->
+          <div class="card">
+            <h2 class="card-title">Case volume — last 6 weeks</h2>
+            <div id="reports-trend-chart" class="trend-chart"></div>
+          </div>
         </section>
 
         <!-- ============== Settings (real connection info from /api/config) ============== -->

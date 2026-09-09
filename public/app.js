@@ -2265,25 +2265,61 @@ function startCaseDetailPolling(jobId) {
 const REPORTS_APPROVE_PATTERN = /approve|pass|clear|accept/i;
 const REPORTS_REJECT_PATTERN = /reject|declin|deny|fail/i;
 
-function isThisMonth(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+// Colors for the Automation Outcome donut - the same green/blue/dark
+// three-color vocabulary QUEUE_STATUS_COLORS already established for a
+// donut+legend breakdown elsewhere in this app (Case Queue), reused here
+// for visual consistency even though the underlying statuses differ
+// (outcome, not case state).
+const REPORTS_OUTCOME_COLORS = {
+  Approved: '#57d873',
+  'Human Review': 'var(--color-blue)',
+  Rejected: 'var(--color-text)',
+};
+
+// ADDED 2026-09-09: date-range picker for the Reports page (was fixed to
+// "this calendar month" only). Each range also carries the immediately
+// preceding, equal-length window so the stat tiles can show a real
+// vs.-previous-period trend rather than a bare snapshot - see
+// computeReportsStatsForWindow() below, run twice per render (once per
+// window), not sample data.
+function getReportsRangeBounds(range, now = new Date()) {
+  if (range === 'lastMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    return { start, end, prevStart, prevEnd: start, subtitle: 'Last calendar month, computed from real case history.' };
+  }
+  if (range === 'last90') {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const end = now;
+    const start = new Date(now.getTime() - 90 * dayMs);
+    const prevEnd = start;
+    const prevStart = new Date(start.getTime() - 90 * dayMs);
+    return { start, end, prevStart, prevEnd, subtitle: 'The last 90 days, computed from real case history.' };
+  }
+  // default: thisMonth
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return { start, end, prevStart, prevEnd: start, subtitle: 'This calendar month, computed from real case history.' };
 }
 
-// COMPLETED cases this month only, for both the turnaround average and
-// the outcome breakdown - an IN_PROGRESS/WAITING_REVIEW case has no
-// decision or final turnaround yet, and a FAILED/CANCELLED/TIMED_OUT one
-// isn't an automation decision, it's an error, so neither belongs here.
-function computeReportsStats(entries) {
-  const thisMonth = entries.filter((e) => isThisMonth(e.submittedAt));
-  const completedThisMonth = thisMonth.filter((e) => e.status === 'COMPLETED');
+// Same COMPLETED-only scoping computeReportsStats always used (an
+// IN_PROGRESS/WAITING_REVIEW case has no decision or final turnaround
+// yet, and a FAILED/CANCELLED/TIMED_OUT one isn't an automation
+// decision, it's an error - neither belongs in the outcome/turnaround
+// figures), just parameterized on an explicit [start, end) window instead
+// of hardcoding "this calendar month" - see getReportsRangeBounds() above
+// for the windows actually passed in.
+function computeReportsStatsForWindow(entries, start, end) {
+  const inWindow = entries.filter((e) => {
+    const d = new Date(e.submittedAt);
+    return !Number.isNaN(d.getTime()) && d >= start && d < end;
+  });
+  const completed = inWindow.filter((e) => e.status === 'COMPLETED');
 
-  const avgTurnaroundMs = completedThisMonth.length
-    ? completedThisMonth.reduce((sum, e) => {
-        return sum + (new Date(e.completedAt).getTime() - new Date(e.submittedAt).getTime());
-      }, 0) / completedThisMonth.length
+  const avgTurnaroundMs = completed.length
+    ? completed.reduce((sum, e) => sum + (new Date(e.completedAt).getTime() - new Date(e.submittedAt).getTime()), 0) / completed.length
     : null;
 
   // reviewedBy is our own reliable, structured signal for "a human
@@ -2291,11 +2327,11 @@ function computeReportsStats(entries) {
   // submitted (see server.js's POST /api/run/:id/review) - so it's
   // checked first and takes priority over finalDecision keyword-matching,
   // which only ever splits whatever's left into Approved/Rejected.
-  // Anything finalDecision doesn't clearly match either pattern for
-  // defaults into Human Review too, rather than risk silently
-  // mis-bucketing an unrecognized value as a confident Approved/Rejected.
+  // Anything finalDecision doesn't clearly match either pattern defaults
+  // into Human Review too, rather than risk silently mis-bucketing an
+  // unrecognized value as a confident Approved/Rejected.
   const outcomeCounts = { Approved: 0, 'Human Review': 0, Rejected: 0 };
-  completedThisMonth.forEach((e) => {
+  completed.forEach((e) => {
     if (e.reviewedBy) {
       outcomeCounts['Human Review'] += 1;
     } else if (e.finalDecision && REPORTS_APPROVE_PATTERN.test(e.finalDecision)) {
@@ -2308,36 +2344,99 @@ function computeReportsStats(entries) {
   });
 
   return {
-    casesThisMonth: thisMonth.length,
+    caseCount: inWindow.length,
     avgTurnaroundMs,
-    completedThisMonthCount: completedThisMonth.length,
+    completedCount: completed.length,
     outcomeCounts,
   };
 }
 
-async function renderReports() {
-  const statsEl = document.getElementById('reports-stats');
-  const breakdownsEl = document.getElementById('reports-breakdowns');
-  if (!statsEl || !breakdownsEl) return;
-
-  let entries;
-  try {
-    entries = await fetchCaseHistory();
-  } catch (err) {
-    statsEl.textContent = 'Could not load report data.';
-    breakdownsEl.innerHTML = '';
-    return;
+// Real per-week case counts for the trend chart at the bottom of Reports -
+// six rolling 7-day windows ending now, most recent (partial) week last.
+// Independent of the range <select> above: this always looks back from
+// today regardless of which reporting window is selected, same as a
+// ticker showing recent activity alongside a period-specific summary.
+function computeWeeklyCaseVolume(entries, weeks = 6, now = new Date()) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const buckets = [];
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const end = new Date(now.getTime() - i * 7 * dayMs);
+    const start = new Date(end.getTime() - 7 * dayMs);
+    buckets.push({ start, end, count: 0 });
   }
+  entries.forEach((e) => {
+    const d = new Date(e.submittedAt);
+    if (Number.isNaN(d.getTime())) return;
+    const bucket = buckets.find((b) => d >= b.start && d < b.end);
+    if (bucket) bucket.count += 1;
+  });
+  return buckets;
+}
 
-  const { casesThisMonth, avgTurnaroundMs, completedThisMonthCount, outcomeCounts } = computeReportsStats(entries);
+function formatReportsWeekRange(start, end) {
+  const opts = { month: 'short', day: 'numeric' };
+  const endInclusive = new Date(end.getTime() - 1);
+  return `${start.toLocaleDateString(undefined, opts)}–${endInclusive.toLocaleDateString(undefined, opts)}`;
+}
 
-  const stats = [
-    { label: 'Cases This Month', value: String(casesThisMonth) },
-    { label: 'Avg. Turnaround', value: avgTurnaroundMs === null ? '—' : formatDuration(avgTurnaroundMs) },
+// goodWhen: 'up' when a larger current-vs-previous number is the
+// favorable outcome (more cases handled), 'down' when a smaller one is
+// (a faster turnaround). --good is always green regardless of whether
+// the raw number went up or down - the arrow glyph shows the actual
+// direction, the color shows whether that direction is the good one for
+// this particular metric. --neutral (muted gray, never red - see this
+// file's palette comment) covers both an unfavorable change and the
+// no-prior-data/no-change cases alike.
+function buildReportsTrendEl(delta, goodWhen, note) {
+  const wrap = document.createElement('div');
+  if (delta === null || delta === 0) {
+    wrap.className = 'stat-tile-trend stat-tile-trend--neutral';
+    wrap.textContent = note;
+    return wrap;
+  }
+  const arrow = delta > 0 ? '▲' : '▼';
+  const favorable = goodWhen === 'up' ? delta > 0 : delta < 0;
+  wrap.className = `stat-tile-trend ${favorable ? 'stat-tile-trend--good' : 'stat-tile-trend--neutral'}`;
+  const arrowSpan = document.createElement('span');
+  arrowSpan.textContent = `${arrow} ${Math.abs(delta)}% `;
+  const noteSpan = document.createElement('span');
+  noteSpan.className = 'stat-tile-trend-note';
+  noteSpan.textContent = note;
+  wrap.append(arrowSpan, noteSpan);
+  return wrap;
+}
+
+function renderReportsStatTiles(containerId, current, previous) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+
+  const casesDelta = previous.caseCount ? Math.round(((current.caseCount - previous.caseCount) / previous.caseCount) * 100) : null;
+  const casesNote = previous.caseCount ? `vs. previous period (${previous.caseCount})` : 'No prior-period cases to compare';
+
+  const turnaroundDelta = (current.avgTurnaroundMs !== null && previous.avgTurnaroundMs)
+    ? Math.round(((current.avgTurnaroundMs - previous.avgTurnaroundMs) / previous.avgTurnaroundMs) * 100)
+    : null;
+  const turnaroundNote = !previous.avgTurnaroundMs
+    ? 'No prior-period figure to compare'
+    : turnaroundDelta > 0
+      ? 'Slower than previous period'
+      : turnaroundDelta < 0
+        ? 'Faster than previous period'
+        : 'Same as previous period';
+
+  const tiles = [
+    { label: 'Cases', value: String(current.caseCount), delta: casesDelta, goodWhen: 'up', note: casesNote },
+    {
+      label: 'Avg. Turnaround',
+      value: current.avgTurnaroundMs === null ? '—' : formatDuration(current.avgTurnaroundMs),
+      delta: turnaroundDelta,
+      goodWhen: 'down',
+      note: turnaroundNote,
+    },
   ];
 
-  statsEl.innerHTML = '';
-  stats.forEach((tile) => {
+  tiles.forEach((tile) => {
     const div = document.createElement('div');
     div.className = 'stat-tile';
     const label = document.createElement('div');
@@ -2346,63 +2445,207 @@ async function renderReports() {
     const value = document.createElement('div');
     value.className = 'stat-tile-value';
     value.textContent = tile.value;
-    div.appendChild(label);
-    div.appendChild(value);
-    statsEl.appendChild(div);
-  });
-
-  // pct is null (rendered as '—', zero-width bar) rather than 0 when
-  // there are no completed cases this month at all - distinct from a
-  // genuine 0% outcome (completed cases exist, just none landed in this
-  // bucket).
-  const breakdowns = [
-    {
-      title: 'Automation Outcome',
-      rows: ['Approved', 'Human Review', 'Rejected'].map((label) => ({
-        label,
-        pct: completedThisMonthCount ? Math.round((outcomeCounts[label] / completedThisMonthCount) * 100) : null,
-      })),
-    },
-  ];
-
-  breakdownsEl.innerHTML = '';
-  breakdowns.forEach((block) => {
-    const blockEl = document.createElement('div');
-    blockEl.className = 'report-block';
-
-    const title = document.createElement('div');
-    title.className = 'report-block-title';
-    title.textContent = block.title;
-    blockEl.appendChild(title);
-
-    block.rows.forEach((row) => {
-      const rowEl = document.createElement('div');
-      rowEl.className = 'report-row';
-
-      const label = document.createElement('div');
-      label.className = 'report-row-label';
-      label.textContent = row.label;
-
-      const track = document.createElement('div');
-      track.className = 'report-bar-track';
-      const fill = document.createElement('div');
-      fill.className = 'report-bar-fill';
-      fill.style.width = `${row.pct ?? 0}%`;
-      track.appendChild(fill);
-
-      const value = document.createElement('div');
-      value.className = 'report-row-value';
-      value.textContent = row.pct === null ? '—' : `${row.pct}%`;
-
-      rowEl.appendChild(label);
-      rowEl.appendChild(track);
-      rowEl.appendChild(value);
-      blockEl.appendChild(rowEl);
-    });
-
-    breakdownsEl.appendChild(blockEl);
+    div.append(label, value, buildReportsTrendEl(tile.delta, tile.goodWhen, tile.note));
+    el.appendChild(div);
   });
 }
+
+// Donut+legend for Automation Outcome, built the same way
+// buildQueueDonutSvg()/buildQueueLegendRow() build Case Queue's - kept as
+// separate functions (rather than generalizing those) so this page can't
+// accidentally change Case Queue's rendering, and vice versa.
+function buildReportsDonutSvg(outcomeCounts, completedCount) {
+  const size = 120;
+  const strokeWidth = 14;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const gap = completedCount ? circumference * 0.015 : 0;
+  const svgNS = 'http://www.w3.org/2000/svg';
+
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.classList.add('queue-donut-svg');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute(
+    'aria-label',
+    `${outcomeCounts.Approved} approved, ${outcomeCounts['Human Review']} human review, ${outcomeCounts.Rejected} rejected, out of ${completedCount} completed cases`
+  );
+
+  const track = document.createElementNS(svgNS, 'circle');
+  track.setAttribute('cx', String(size / 2));
+  track.setAttribute('cy', String(size / 2));
+  track.setAttribute('r', String(radius));
+  track.setAttribute('fill', 'none');
+  track.setAttribute('stroke', 'var(--color-surface-muted)');
+  track.setAttribute('stroke-width', String(strokeWidth));
+  svg.appendChild(track);
+
+  let cumulative = 0;
+  ['Approved', 'Human Review', 'Rejected'].forEach((key) => {
+    const value = outcomeCounts[key];
+    if (!value || !completedCount) return;
+    const share = value / completedCount;
+    const arcLength = Math.max(share * circumference - gap, 0);
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', String(size / 2));
+    circle.setAttribute('cy', String(size / 2));
+    circle.setAttribute('r', String(radius));
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', REPORTS_OUTCOME_COLORS[key]);
+    circle.setAttribute('stroke-width', String(strokeWidth));
+    circle.setAttribute('stroke-linecap', 'round');
+    circle.setAttribute('stroke-dasharray', `${arcLength} ${circumference - arcLength}`);
+    circle.setAttribute('stroke-dashoffset', String(-cumulative));
+    circle.setAttribute('transform', `rotate(-90 ${size / 2} ${size / 2})`);
+    svg.appendChild(circle);
+    cumulative += share * circumference;
+  });
+
+  return svg;
+}
+
+function buildReportsLegendRow(color, label, value, total) {
+  const row = document.createElement('div');
+  row.className = 'queue-legend-row';
+
+  const dot = document.createElement('span');
+  dot.className = 'queue-legend-dot';
+  dot.style.background = color;
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'queue-legend-label';
+  labelEl.textContent = label;
+
+  const pctEl = document.createElement('span');
+  pctEl.className = 'queue-legend-pct';
+  pctEl.textContent = total ? `${Math.round((value / total) * 100)}%` : '—';
+
+  const countEl = document.createElement('span');
+  countEl.className = 'queue-legend-count';
+  countEl.textContent = String(value);
+
+  row.append(dot, labelEl, pctEl, countEl);
+  return row;
+}
+
+function buildReportsBreakdown(outcomeCounts, completedCount) {
+  const wrap = document.createElement('div');
+  wrap.className = 'queue-breakdown';
+
+  const donutWrap = document.createElement('div');
+  donutWrap.className = 'queue-donut-wrap';
+  donutWrap.appendChild(buildReportsDonutSvg(outcomeCounts, completedCount));
+
+  const center = document.createElement('div');
+  center.className = 'queue-donut-center';
+  const centerValue = document.createElement('div');
+  centerValue.className = 'queue-donut-center-value';
+  centerValue.textContent = String(completedCount);
+  const centerLabel = document.createElement('div');
+  centerLabel.className = 'queue-donut-center-label';
+  centerLabel.textContent = 'completed';
+  center.append(centerValue, centerLabel);
+  donutWrap.appendChild(center);
+
+  const legend = document.createElement('div');
+  legend.className = 'queue-legend';
+  legend.appendChild(buildReportsLegendRow(REPORTS_OUTCOME_COLORS.Approved, 'Approved', outcomeCounts.Approved, completedCount));
+  legend.appendChild(buildReportsLegendRow(REPORTS_OUTCOME_COLORS['Human Review'], 'Human Review', outcomeCounts['Human Review'], completedCount));
+  legend.appendChild(buildReportsLegendRow(REPORTS_OUTCOME_COLORS.Rejected, 'Rejected', outcomeCounts.Rejected, completedCount));
+
+  wrap.append(donutWrap, legend);
+  return wrap;
+}
+
+function renderReportsTrendChart(containerId, buckets) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+  buckets.forEach((bucket, i) => {
+    const col = document.createElement('div');
+    col.className = 'trend-bar-col';
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'trend-bar-value';
+    valueEl.textContent = String(bucket.count);
+
+    const bar = document.createElement('div');
+    bar.className = i === buckets.length - 1 ? 'trend-bar trend-bar--current' : 'trend-bar';
+    // Floors at 4% so a genuine 0-count week still shows a sliver rather
+    // than disappearing entirely - a missing bar reads as "no data", not
+    // "zero cases", at this size.
+    const heightPct = Math.max(4, Math.round((bucket.count / maxCount) * 100));
+    bar.style.height = `${heightPct}%`;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'trend-bar-label';
+    labelEl.textContent = formatReportsWeekRange(bucket.start, bucket.end);
+
+    col.append(valueEl, bar, labelEl);
+    el.appendChild(col);
+  });
+}
+
+// Cached so the range <select> can re-render instantly from data already
+// in hand instead of re-fetching case history on every change - see
+// initReportsRangeSelect() below. Repopulated on every real visit to the
+// Reports tab by renderReports() (called from loadViewData()).
+let reportsEntriesCache = [];
+let reportsRange = 'thisMonth';
+
+function renderReportsContent() {
+  const statsEl = document.getElementById('reports-stats');
+  const breakdownsEl = document.getElementById('reports-breakdowns');
+  if (!statsEl || !breakdownsEl) return;
+
+  const bounds = getReportsRangeBounds(reportsRange);
+  const subtitleEl = document.getElementById('reports-subtitle');
+  if (subtitleEl) subtitleEl.textContent = bounds.subtitle;
+
+  const current = computeReportsStatsForWindow(reportsEntriesCache, bounds.start, bounds.end);
+  const previous = computeReportsStatsForWindow(reportsEntriesCache, bounds.prevStart, bounds.prevEnd);
+
+  renderReportsStatTiles('reports-stats', current, previous);
+
+  breakdownsEl.innerHTML = '';
+  const block = document.createElement('div');
+  block.className = 'report-block report-block--donut';
+  const title = document.createElement('div');
+  title.className = 'report-block-title';
+  title.textContent = 'Automation Outcome';
+  block.append(title, buildReportsBreakdown(current.outcomeCounts, current.completedCount));
+  breakdownsEl.appendChild(block);
+
+  renderReportsTrendChart('reports-trend-chart', computeWeeklyCaseVolume(reportsEntriesCache));
+}
+
+async function renderReports() {
+  const statsEl = document.getElementById('reports-stats');
+  const breakdownsEl = document.getElementById('reports-breakdowns');
+  if (!statsEl || !breakdownsEl) return;
+
+  try {
+    reportsEntriesCache = await fetchCaseHistory();
+  } catch (err) {
+    statsEl.textContent = 'Could not load report data.';
+    breakdownsEl.innerHTML = '';
+    return;
+  }
+
+  renderReportsContent();
+}
+
+(function initReportsRangeSelect() {
+  const select = document.getElementById('reports-range-select');
+  if (!select) return;
+  select.addEventListener('change', () => {
+    reportsRange = select.value;
+    renderReportsContent();
+  });
+})();
 
 // ============================================================
 // Screening policy: one saved document applied to every case, replacing
