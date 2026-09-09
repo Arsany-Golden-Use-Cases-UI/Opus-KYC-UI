@@ -55,19 +55,53 @@
 
   <div class="app-shell">
 
+    <!-- Collapsed to an icon-only rail by default, expanding over the
+         content (not pushing it - see .sidebar-inner's position: absolute
+         in styles.css) on hover or keyboard focus. .app-sidebar itself
+         stays a fixed-width gutter so .app-main never reflows; only
+         .sidebar-inner's width actually changes. Every item's label is
+         wrapped in its own span (rather than being the button's plain
+         text) so it can be clipped while collapsed without touching the
+         icon beside it - see navItems in app.js, which reads
+         .dataset.view/.dataset.roles, never .textContent, so this
+         restructuring doesn't touch any existing logic. -->
     <aside class="app-sidebar">
-      <div class="sidebar-brand">
-        <span class="sidebar-brand-text">Banking KYC</span>
-      </div>
-      <nav class="sidebar-nav">
-        <button type="button" class="nav-item active" data-view="intake" data-roles="agent,manager">New Intake</button>
-        <button type="button" class="nav-item" data-view="pending" data-roles="manager">Pending Reviews</button>
-        <button type="button" class="nav-item" data-view="queue" data-roles="agent,manager">Case Queue</button>
-        <button type="button" class="nav-item" data-view="reports" data-roles="manager">Reports</button>
-        <button type="button" class="nav-item" data-view="settings" data-roles="agent,manager">Settings</button>
-      </nav>
-      <div class="sidebar-footer">
-        <span class="sidebar-footer-text">Applied AI</span>
+      <div class="sidebar-inner">
+        <div class="sidebar-brand">
+          <span class="sidebar-brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><path d="M5 10v9M19 10v9M9 19v-6h6v6"/><path d="M3 19h18"/></svg></span>
+          <span class="sidebar-brand-text">Banking KYC</span>
+        </div>
+        <nav class="sidebar-nav">
+          <button type="button" class="nav-item active" data-view="intake" data-roles="agent,manager">
+            <span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6M9 15h6"/></svg></span>
+            <span class="nav-item-label">New Intake</span>
+          </button>
+          <button type="button" class="nav-item" data-view="pending" data-roles="manager">
+            <span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+            <span class="nav-item-label">Pending Reviews</span>
+            <!-- Hidden until refreshPendingReviewsBadge() (app.js) has a
+                 real count and the signed-in role is a Compliance Officer
+                 - a KYC Agent never sees this nav item at all (see
+                 data-roles above, enforced by applyRoleRestrictions()),
+                 so the badge never needs to handle that case. -->
+            <span id="pending-reviews-badge" class="nav-badge" hidden>0</span>
+          </button>
+          <button type="button" class="nav-item" data-view="queue" data-roles="agent,manager">
+            <span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg></span>
+            <span class="nav-item-label">Case Queue</span>
+          </button>
+          <button type="button" class="nav-item" data-view="reports" data-roles="manager">
+            <span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="5" y="13" width="3" height="5"/><rect x="10.5" y="8" width="3" height="10"/><rect x="16" y="4" width="3" height="14"/></svg></span>
+            <span class="nav-item-label">Reports</span>
+          </button>
+          <button type="button" class="nav-item" data-view="settings" data-roles="agent,manager">
+            <span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+            <span class="nav-item-label">Settings</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <span class="sidebar-footer-text">Applied AI</span>
+        </div>
       </div>
     </aside>
 

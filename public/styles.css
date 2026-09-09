@@ -369,32 +369,70 @@ img {
   min-height: 100vh;
 }
 
-/* position: sticky (not fixed) so it stays part of .app-shell's flex
-   flow for width/sizing, but pins to the viewport instead of scrolling
-   away with .app-main's content - which now runs well past one screen on
-   pages like New Intake. overflow-y: auto is a safeguard for a future
-   nav with enough items to exceed the viewport height itself, not
-   something the current five items trigger. */
+/* position: sticky (not fixed) so .app-sidebar itself stays part of
+   .app-shell's flex flow for width/sizing, but pins to the viewport
+   instead of scrolling away with .app-main's content. It's now a fixed,
+   narrow gutter (68px, icon-only) - .app-main is sized against this
+   width and never reflows. All the actual visual sidebar (background,
+   padding, the nav itself) lives in .sidebar-inner below, which expands
+   OVER .app-main on hover/focus instead of pushing it - see that rule's
+   own comment. */
 .app-sidebar {
   flex-shrink: 0;
-  width: 216px;
-  display: flex;
-  flex-direction: column;
+  width: 68px;
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+}
+
+/* The part that actually slides out - ADDED 2026-09-09 (was .app-sidebar
+   directly, at a fixed 216px, before this). position: absolute against
+   .app-sidebar's sticky-established containing block, sized to match the
+   gutter above while collapsed; :hover/:focus-within (keyboard/tap
+   equivalent of hover, since a bare :hover-only rail is unreachable
+   without a mouse) grows it to the old 216px and lets the label spans
+   (hidden only by this element's own overflow: hidden while collapsed,
+   not by any [hidden]/display trick) become readable again. The
+   transition is on this element, not .app-sidebar, so .app-main's layout
+   width is untouched throughout - only this overlay's own box changes. */
+.sidebar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 68px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 40;
   /* Brand purple instead of the reference's navy - ties the shell back to
      the existing AppliedAI/Opus palette rather than borrowing their color. */
   background: var(--color-blue);
   color: rgba(255, 255, 255, 0.9);
   padding: 1.4rem 0 1rem;
+  transition: width 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app-sidebar:hover .sidebar-inner,
+.app-sidebar:focus-within .sidebar-inner {
+  width: 216px;
+  overflow-y: auto;
+  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.18);
 }
 
 .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
   padding: 0 1.25rem 1.1rem;
   margin-bottom: 0.6rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  white-space: nowrap;
+}
+
+.sidebar-brand-icon {
+  flex-shrink: 0;
+  display: flex;
 }
 
 .sidebar-brand-text {
@@ -413,8 +451,12 @@ img {
 }
 
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
   width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
   text-align: left;
   cursor: pointer;
   background: none;
@@ -446,10 +488,47 @@ img {
   color: #ffffff;
 }
 
+/* Fixed-width so it stays put at the same spot whether .sidebar-inner is
+   collapsed (68px - just this icon shows) or expanded (216px - the label
+   beside it becomes readable, clipped by .nav-item's own overflow:hidden
+   until then, not a separate visibility toggle). */
+.nav-item-icon {
+  flex-shrink: 0;
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-item-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Real-time count of WAITING_REVIEW cases (see refreshPendingReviewsBadge()
+   in app.js) - hidden at 0 rather than showing "0", same as any other
+   "nothing to report" convention elsewhere in this app. Sits after the
+   label in source order so it reads naturally once expanded; while
+   collapsed it's clipped by .nav-item's overflow along with the label. */
+.nav-badge {
+  flex-shrink: 0;
+  background: #ffffff;
+  color: var(--color-blue);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  min-width: 1.1rem;
+  text-align: center;
+}
+
 .sidebar-footer {
   padding: 1rem 1.25rem 0;
   margin-top: 0.75rem;
   border-top: 1px solid rgba(255, 255, 255, 0.16);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .sidebar-footer-text {

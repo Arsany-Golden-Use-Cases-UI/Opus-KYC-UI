@@ -231,6 +231,7 @@ roleGateSubmitBtn.addEventListener('click', async () => {
 const navItems = Array.from(document.querySelectorAll('.nav-item'));
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'));
 const headerViewTitle = document.getElementById('header-view-title');
+const pendingReviewsBadge = document.getElementById('pending-reviews-badge');
 
 const VIEW_TITLES = {
   queue: 'Case Queue',
@@ -327,6 +328,40 @@ function applyRoleRestrictions() {
   const activeBtn = activePanel && navItems.find((btn) => btn.dataset.view === activePanel.dataset.viewPanel);
   if (!activeBtn || !isRoleAllowed(activeBtn)) {
     switchToView('queue');
+  }
+
+  refreshPendingReviewsBadge();
+}
+
+// Real-time "how many cases need me" count on the sidebar's Pending
+// Reviews item - a KYC Agent never sees this nav item at all (data-roles
+// on it is manager-only), so there's nothing to show for that role;
+// hidden entirely at 0 rather than showing "0", same convention as any
+// other empty-state elsewhere in this app.
+function setPendingReviewsBadgeCount(count) {
+  if (!pendingReviewsBadge) return;
+  pendingReviewsBadge.textContent = String(count);
+  pendingReviewsBadge.hidden = !count;
+}
+
+// Called from applyRoleRestrictions() (so it's live right after sign-in,
+// a role switch, or backToRoleSelection()'s reset) and again after a
+// review is submitted from the in-progress poll flow (the Pending
+// Reviews tab's own renderPendingReviews() updates the badge itself from
+// the fetch it already made, rather than calling this and fetching
+// twice). A transient fetch error here just leaves whatever count was
+// already showing rather than blanking out a moment-ago-accurate one.
+async function refreshPendingReviewsBadge() {
+  if (!pendingReviewsBadge) return;
+  if (currentRole !== 'manager') {
+    pendingReviewsBadge.hidden = true;
+    return;
+  }
+  try {
+    const entries = await fetchCaseHistory();
+    setPendingReviewsBadgeCount(entries.filter((e) => e.status === 'WAITING_REVIEW').length);
+  } catch (err) {
+    // see comment above - leave the existing badge state alone.
   }
 }
 
@@ -1229,6 +1264,7 @@ reviewSubmitBtn.addEventListener('click', async () => {
       // node on its own next tick, no need to restart it here.
       switchToView('intake');
       statusText.textContent = 'Review submitted — resuming workflow…';
+      refreshPendingReviewsBadge();
     } else {
       // Reached via the Pending Reviews tab - there's no poll loop for
       // this job in this tab (it may belong to a case someone else
@@ -1990,6 +2026,9 @@ async function renderPendingReviews() {
   try {
     const entries = await fetchCaseHistory();
     const pending = entries.filter((e) => e.status === 'WAITING_REVIEW');
+    // Reuses this fetch rather than calling refreshPendingReviewsBadge()
+    // (which would fetch a second time) - same count, same source.
+    setPendingReviewsBadgeCount(pending.length);
     wrap.innerHTML = '';
 
     if (!pending.length) {
