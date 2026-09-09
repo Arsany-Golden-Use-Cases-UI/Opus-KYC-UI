@@ -391,10 +391,14 @@ img {
    gutter above while collapsed; :hover/:focus-within (keyboard/tap
    equivalent of hover, since a bare :hover-only rail is unreachable
    without a mouse) grows it to the old 216px and lets the label spans
-   (hidden only by this element's own overflow: hidden while collapsed,
-   not by any [hidden]/display trick) become readable again. The
-   transition is on this element, not .app-sidebar, so .app-main's layout
-   width is untouched throughout - only this overlay's own box changes. */
+   become readable again. The label/brand/footer text itself is hidden via
+   opacity (see .sidebar-brand-text/.nav-item-label/.nav-badge/
+   .sidebar-footer-text below), not left to this element's overflow: hidden
+   alone - overflow-clipping text at 68px cut individual glyphs in half
+   instead of hiding the whole word, which is what this opacity toggle
+   fixes. The transition is on this element, not .app-sidebar, so
+   .app-main's layout width is untouched throughout - only this overlay's
+   own box changes. */
 .sidebar-inner {
   position: absolute;
   top: 0;
@@ -433,6 +437,31 @@ img {
 .sidebar-brand-icon {
   flex-shrink: 0;
   display: flex;
+}
+
+/* Collapsed rail: hidden via opacity (not just clipped by the parent's
+   overflow) so nothing ever reads as a partial/cut-off letter - only the
+   icons show at 68px. Fades in on hover/focus-within, with a short delay
+   so it appears once .sidebar-inner has mostly finished widening rather
+   than mid-expand. */
+.sidebar-brand-text,
+.nav-item-label,
+.nav-badge,
+.sidebar-footer-text {
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.app-sidebar:hover .sidebar-brand-text,
+.app-sidebar:hover .nav-item-label,
+.app-sidebar:hover .nav-badge,
+.app-sidebar:hover .sidebar-footer-text,
+.app-sidebar:focus-within .sidebar-brand-text,
+.app-sidebar:focus-within .nav-item-label,
+.app-sidebar:focus-within .nav-badge,
+.app-sidebar:focus-within .sidebar-footer-text {
+  opacity: 1;
+  transition: opacity 0.15s ease 0.08s;
 }
 
 .sidebar-brand-text {
@@ -490,8 +519,8 @@ img {
 
 /* Fixed-width so it stays put at the same spot whether .sidebar-inner is
    collapsed (68px - just this icon shows) or expanded (216px - the label
-   beside it becomes readable, clipped by .nav-item's own overflow:hidden
-   until then, not a separate visibility toggle). */
+   beside it becomes readable). Always fully opaque - only the label/badge
+   fade in beside it, see .nav-item-label/.nav-badge's opacity rule above. */
 .nav-item-icon {
   flex-shrink: 0;
   width: 18px;
@@ -509,7 +538,8 @@ img {
    in app.js) - hidden at 0 rather than showing "0", same as any other
    "nothing to report" convention elsewhere in this app. Sits after the
    label in source order so it reads naturally once expanded; while
-   collapsed it's clipped by .nav-item's overflow along with the label. */
+   collapsed it's faded out along with the label (see the opacity rule
+   above), not left to .nav-item's overflow to clip mid-glyph. */
 .nav-badge {
   flex-shrink: 0;
   background: #ffffff;
