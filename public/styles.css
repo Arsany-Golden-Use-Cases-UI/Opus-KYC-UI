@@ -217,17 +217,17 @@ img {
    a larger size plus the same .btn.btn-primary gradient button as the
    form's submit action - no new visual language, just a bigger front door. */
 
-/* UPDATED 2026-09-09: was a bare flex column centered dead-in-the-middle
-   of an otherwise empty page (looked like a stalled loading state on a
-   tall viewport). Now aligns the card to the top third via padding-top
-   instead of vertical centering - see .landing-card for the actual visual
-   panel. */
+/* UPDATED 2026-09-09: added the bordered/shadowed .landing-card below for
+   the "unframed text floating on gray" look, but kept this element's own
+   size/position exactly as it was before that pass - full-viewport,
+   vertically + horizontally centered - since the top-aligned/narrower
+   variant tried first didn't fit. */
 .landing-view {
   min-height: 100vh;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: min(18vh, 9rem) 1.5rem 2rem;
+  padding: 2rem 1.5rem;
 }
 
 /* Same [hidden]-vs-author-stylesheet issue as #app-view below: without
@@ -241,20 +241,22 @@ img {
 /* The actual visual panel - previously the logos/title/subtitle/button
    sat directly on the page background with nothing framing them; this
    card gives the landing screen the same "deliberate panel" treatment as
-   every other card in the app instead of looking unfinished. */
+   every other card in the app instead of looking unfinished. max-width
+   matches .landing-view's original 480px footprint, not the narrower
+   380px tried in the first pass. */
 .landing-card {
   width: 100%;
-  max-width: 380px;
+  max-width: 480px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 16px;
   box-shadow: var(--shadow-card);
-  padding: 2.25rem 2rem 2rem;
+  padding: 2.5rem 2.5rem 2.25rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
 .landing-logos {
