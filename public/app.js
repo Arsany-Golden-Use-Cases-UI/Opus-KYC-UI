@@ -1035,23 +1035,169 @@ function buildFilePreviewCard(label, value) {
   return card;
 }
 
+// A leaf value inside renderJsonTree() below - plain text for most
+// things, but a real badge (reusing the exact classes/tones the rest of
+// the app already uses for these same two vocabularies) for a boolean or
+// a severity word, since "HIGH" or "true" sitting in a dense block of
+// extracted-field text is easy to skim right past otherwise.
+function renderJsonLeafValue(value) {
+  if (typeof value === 'boolean') {
+    const badge = document.createElement('span');
+    badge.className = `badge ${value ? 'tone-blue' : 'tone-neutral'}`;
+    badge.textContent = value ? 'Yes' : 'No';
+    return badge;
+  }
+  if (typeof value === 'string' && SEVERITY_LEVELS.includes(value.trim().toUpperCase())) {
+    const level = value.trim().toUpperCase();
+    const badge = document.createElement('span');
+    badge.className = `badge ${severityTone(level)}`;
+    badge.textContent = level;
+    return badge;
+  }
+  const text = value === null || value === undefined || value === '' ? '\u2014' : String(value);
+  return document.createTextNode(text);
+}
+
+// ADDED 2026-09-09: structured renderer for a parsed JSON value (object,
+// array, or scalar), used for any review-input field whose label ends in
+// "JSON" (see renderReviewInputs() below) - replaces what used to be the
+// entire stringified blob dumped as one dense, right-aligned monospace
+// line in a plain settings-row. Recurses for nested objects/arrays;
+// humanizeKey() (already used elsewhere for policy field labels) turns
+// each snake_case key into a real label.
+function renderJsonTree(value) {
+  if (Array.isArray(value)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'json-tree';
+    if (!value.length) {
+      wrap.textContent = '\u2014';
+      return wrap;
+    }
+    // An array of short plain values (e.g. tax_residency_countries) reads
+    // better as one comma-joined line than as N single-item rows; an
+    // array of longer strings (e.g. Key Sanctions Findings, each a full
+    // sentence) comma-joins into the same run-on-paragraph problem this
+    // whole rewrite exists to fix, so it gets a real bullet list instead;
+    // an array of objects (e.g. Policy Breaches) gets a numbered sub-tree
+    // per item.
+    const allPrimitive = value.every((v) => v === null || typeof v !== 'object');
+    if (allPrimitive) {
+      const strings = value.map((v) => (v === null || v === undefined || v === '' ? '\u2014' : String(v)));
+      if (strings.every((s) => s.length <= 40)) {
+        wrap.textContent = strings.join(', ');
+        return wrap;
+      }
+      const list = document.createElement('ul');
+      list.className = 'json-tree-list';
+      strings.forEach((s) => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        list.appendChild(li);
+      });
+      wrap.appendChild(list);
+      return wrap;
+    }
+    value.forEach((item, i) => {
+      const itemRow = document.createElement('div');
+      itemRow.className = 'json-tree-array-item';
+      const idx = document.createElement('div');
+      idx.className = 'json-tree-array-index';
+      idx.textContent = `#${i + 1}`;
+      itemRow.append(idx, renderJsonTree(item));
+      wrap.appendChild(itemRow);
+    });
+    return wrap;
+  }
+
+  if (value && typeof value === 'object') {
+    const wrap = document.createElement('div');
+    wrap.className = 'json-tree';
+    const objEntries = Object.entries(value);
+    if (!objEntries.length) {
+      wrap.textContent = '\u2014';
+      return wrap;
+    }
+    objEntries.forEach(([key, v]) => {
+      const row = document.createElement('div');
+      row.className = 'json-tree-row';
+      const labelEl = document.createElement('div');
+      labelEl.className = 'json-tree-label';
+      labelEl.textContent = humanizeKey(key);
+      const valueEl = document.createElement('div');
+      valueEl.className = 'json-tree-value';
+      if (v && typeof v === 'object') {
+        valueEl.appendChild(renderJsonTree(v));
+      } else {
+        valueEl.appendChild(renderJsonLeafValue(v));
+      }
+      row.append(labelEl, valueEl);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.appendChild(renderJsonLeafValue(value));
+  return wrap;
+}
+
+// ADDED 2026-09-09: Opus's own free-text summaries (Human Readable
+// Summary, Risk Summary, etc.) commonly run several hundred characters
+// with no real line breaks, using " - " as an ad hoc separator between
+// points - see the field itself for an example. Split into a real list
+// once there are enough " - " breaks to look intentional (3+); a shorter
+// string, or one with only an incidental hyphen or two, is left as a
+// plain paragraph instead of an oddly tiny 1-2-item list. A hyphen inside
+// a value that isn't surrounded by spaces on both sides (a date like
+// "2026-03-01", an id like "DOC-001") is never matched, so it's never
+// mistaken for a separator.
+function renderProseValue(text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'review-prose';
+  const segments = text.split(/\s+-\s+/).map((s) => s.trim()).filter(Boolean);
+  if (segments.length >= 3) {
+    const list = document.createElement('ul');
+    list.className = 'review-prose-list';
+    segments.forEach((seg) => {
+      const li = document.createElement('li');
+      li.textContent = seg;
+      list.appendChild(li);
+    });
+    wrap.appendChild(list);
+  } else {
+    const p = document.createElement('p');
+    p.textContent = text;
+    wrap.appendChild(p);
+  }
+  return wrap;
+}
+
 // containerId defaults to the HITL review card's own inputs block; the
 // case-detail panel (loadAndShowCaseDetail(), near renderCaseTable())
 // passes 'case-detail-inputs' instead to render a job's original inputs
 // there, reusing this same generic key/value rendering - PLUS, as of
-// 2026-09-08, special-cased display for whichever of these four New
-// Intake input labels are actually present: ID Document / Proof of
-// Address become file-preview cards, Application Form JSON gets parsed
-// and rendered via buildApplicationFormReview() instead of a JSON blob,
-// and Screening Policy (too large to usefully show inline, and not part
-// of what the applicant submitted) is dropped from the visible list -
-// it's still in the raw-JSON details block below, nothing is deleted.
-// None of this is keyed on Opus's opaque variable IDs (never available
-// client-side) - it matches on the human label instead, so it only ever
-// activates when that label is actually present and otherwise falls back
-// to the original flat row unchanged. A HITL review dispatch's inputs
-// (this function's other caller) come from a different node entirely and
-// won't match any of these labels, so that caller is unaffected.
+// 2026-09-08, special-cased display for whichever of these New Intake
+// input labels are actually present: any URL-shaped value (ID Document,
+// Proof of Address, or anything else Opus labels as a document - broadened
+// 2026-09-09 from an exact "ID Document"/"Proof of Address" label match,
+// which silently missed "Proof Of Address Document" and left it as a bare
+// link in a plain row) becomes a file-preview card; Application Form JSON
+// gets parsed and rendered via buildApplicationFormReview() instead of a
+// JSON blob; any other field whose label ends in "JSON" (Extracted
+// Identity JSON, Extracted POA JSON, Risk Assessment JSON, ...) gets
+// parsed and rendered via renderJsonTree() above instead of the raw
+// stringified blob; a long plain-text field (a free-text summary) gets
+// renderProseValue() above instead of one dense monospace line; and
+// Screening Policy (too large to usefully show inline, and not part of
+// what the applicant submitted) is dropped from the visible list - it's
+// still in the raw-JSON details block below, nothing is deleted. None of
+// this is keyed on Opus's opaque variable IDs (never available
+// client-side) - it matches on the human label/value shape instead, so it
+// only ever activates when that shape is actually present and otherwise
+// falls back to the original flat row unchanged. A HITL review dispatch's
+// inputs (this function's other caller) come from a different node
+// entirely and won't match any of these labels, so that caller benefits
+// from the same broadened matching without needing its own special-casing.
 function renderReviewInputs(inputs, containerId = 'review-inputs') {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -1071,6 +1217,10 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
 
   const fileFieldEntries = [];
   const plainEntries = [];
+  // Long free text and *-labeled-JSON fields - anything too dense for the
+  // compact label/value row below - each gets its own full-width block,
+  // in the order encountered.
+  const detailEntries = [];
   let applicationForm = null;
 
   entries.forEach(([key, rawValue]) => {
@@ -1106,7 +1256,7 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
       // silently dropping it.
     }
 
-    if (normalizedLabel === 'id document' || normalizedLabel === 'proof of address') {
+    if (typeof value === 'string' && /^https?:\/\//i.test(value.trim())) {
       fileFieldEntries.push([label, value]);
       return;
     }
@@ -1115,6 +1265,30 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
       // Not part of what the applicant submitted, and too large to show
       // inline - still in the raw-JSON block below via `inputs`, just not
       // in the visible list.
+      return;
+    }
+
+    if (/\bjson\b/i.test(label)) {
+      let parsed = null;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch {
+          parsed = null;
+        }
+      } else if (value && typeof value === 'object') {
+        parsed = value;
+      }
+      if (parsed !== null && typeof parsed === 'object') {
+        detailEntries.push({ label, kind: 'json', value: parsed });
+        return;
+      }
+      // Couldn't parse - fall through to the plain row below rather than
+      // silently dropping it.
+    }
+
+    if (typeof value === 'string' && value.length > 180) {
+      detailEntries.push({ label, kind: 'prose', value });
       return;
     }
 
@@ -1151,6 +1325,19 @@ function renderReviewInputs(inputs, containerId = 'review-inputs') {
     row.appendChild(labelEl);
     row.appendChild(valueEl);
     container.appendChild(row);
+  });
+
+  detailEntries.forEach(({ label, kind, value }) => {
+    const block = document.createElement('div');
+    block.className = 'review-detail-block';
+
+    const title = document.createElement('div');
+    title.className = 'review-detail-title';
+    title.textContent = label;
+    block.appendChild(title);
+
+    block.appendChild(kind === 'json' ? renderJsonTree(value) : renderProseValue(value));
+    container.appendChild(block);
   });
 
   const details = document.createElement('details');

@@ -2166,6 +2166,110 @@ details summary {
   word-break: break-word;
 }
 
+/* ---------- Human Review: structured JSON + prose blocks - ADDED
+   2026-09-09. A review's "Extracted Identity JSON"/"Extracted POA
+   JSON"/"Risk Assessment JSON" fields (and any long free-text summary)
+   used to land in a plain .settings-row - a baseline flex row with
+   right-aligned monospace text, built for a short "Label: value" pair,
+   not a multi-hundred-character JSON blob or paragraph. These give that
+   content its own full-width block instead (see renderReviewInputs()'s
+   detailEntries in app.js). */
+
+.review-detail-block {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.review-detail-block:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.review-detail-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.65rem;
+}
+
+.review-prose p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.review-prose-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.json-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+.json-tree-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: baseline;
+}
+
+.json-tree-label {
+  flex: 0 0 170px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.json-tree-value {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  color: var(--color-text);
+}
+
+/* A nested object/array value gets its own indented, tinted sub-panel so
+   depth reads visually instead of just via label indentation alone. */
+.json-tree-value > .json-tree {
+  margin-top: 0.4rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--color-surface-muted);
+  border-left: 2px solid var(--color-border);
+  border-radius: 0 8px 8px 0;
+}
+
+.json-tree-array-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.json-tree-array-index {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+/* An array of longer strings (see renderJsonTree()'s length check in
+   app.js) - a real bullet list instead of a comma-joined run-on line. */
+.json-tree-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 /* ---------- Screening policy editor (New Intake) ---------- */
 /* Lives directly on New Intake, in the same <form> as Application Form -
    reuses .form-section / .form-section-title / .field / .field-row from
