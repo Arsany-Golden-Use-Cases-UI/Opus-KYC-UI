@@ -384,8 +384,12 @@
                    tabs and back is safe: switchToView() only toggles
                    panel `hidden`, so in-progress edits here survive the
                    round trip same as the rest of this form. -->
+              <!-- No .form-section-title here, unlike every section above -
+                   the collapsed summary card built into #intake-policy-editor
+                   (see buildPolicyEditor() in app.js) labels itself
+                   ("Screening policy: <name>"), so a second heading above it
+                   would just repeat that. -->
               <div class="form-section">
-                <h3 class="form-section-title">Screening Policy</h3>
                 <div id="intake-policy-editor">Loading…</div>
               </div>
 

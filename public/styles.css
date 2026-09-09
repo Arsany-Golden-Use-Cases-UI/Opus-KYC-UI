@@ -1911,6 +1911,95 @@ details summary {
    that section's styling for every plain field here too, so this doesn't
    introduce a second visual language. */
 
+/* Collapsed-by-default summary card wrapping the whole editor - ADDED
+   2026-09-09, matching a reference design Arsany shared: a one-line
+   "Screening policy: <name>" summary with real counts, and a "View
+   policy" disclosure instead of every section open by default. Plain
+   <details>/<summary> (see buildPolicyEditor() in app.js) - .card's
+   padding/border/shadow apply directly to <details> since neither sets
+   its own `display`, same as any other block element wrapped in .card
+   elsewhere in this app. */
+.policy-summary {
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem 1.5rem;
+}
+
+/* Overrides the generic `details summary` rule further up this file
+   (blue bold text, meant for the plain "View ... (JSON)" disclosures) -
+   a single class outranks that rule's two type selectors, so this wins
+   without !important. Also drops the browser's own disclosure marker;
+   .policy-summary-chevron below is the only expand/collapse indicator. */
+.policy-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  list-style: none;
+}
+
+.policy-summary-header::-webkit-details-marker {
+  display: none;
+}
+
+.policy-summary-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-text);
+  color: #57d873;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.policy-summary-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.policy-summary-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.policy-summary-subtitle {
+  margin-top: 0.15rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.policy-summary-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-blue);
+}
+
+.policy-summary-chevron {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.policy-summary[open] .policy-summary-chevron {
+  transform: rotate(180deg);
+}
+
+.policy-summary-body {
+  margin-top: 1.5rem;
+}
+
 .risk-category-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

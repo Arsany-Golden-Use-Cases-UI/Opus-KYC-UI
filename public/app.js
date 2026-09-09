@@ -2409,6 +2409,16 @@ let settingsPolicyBaseline = null; // last-saved (or last-loaded) copy - Discard
 let settingsPolicyDirty = false;
 let settingsPolicySaving = false;
 
+// Collapsed by default (see buildPolicyEditor()'s <details> wrapper
+// below) - a full risk-factor catalog/decision-matrix editor isn't
+// something most people running a case need to see every time, matching
+// a reference design Arsany shared (2026-09-09): a one-line summary
+// with a "View policy" disclosure instead of everything open by default.
+// Survives Save/Discard's buildPolicyEditor() re-render (both read this
+// instead of hard-coding closed) since neither should collapse a policy
+// the person had deliberately opened to edit.
+let policyEditorExpanded = false;
+
 const RISK_FACTOR_CATEGORY_LABELS = {
   customer: 'Customer',
   geography: 'Geography',
@@ -2706,6 +2716,69 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
   const disabled = false;
   const draft = settingsPolicyDraft;
 
+  // --- Collapsed-by-default summary card. Everything below (Overview
+  // through the Save/Discard footer) goes into `body`, not `el` directly
+  // - <details> only shows it once expanded. Native <details>/<summary>
+  // rather than a hand-rolled toggle, same as the existing "View full
+  // case file (JSON)" / "View raw application JSON" disclosures
+  // elsewhere - just with its own header markup instead of the plain
+  // text summary those use, so `.policy-summary-header` below has to
+  // out-specificity the generic `details summary` rule that styles
+  // those (a single class beats two type selectors, so this is safe
+  // without !important). -->
+  const details = document.createElement('details');
+  details.className = 'policy-summary';
+  details.open = policyEditorExpanded;
+  details.addEventListener('toggle', () => {
+    policyEditorExpanded = details.open;
+    toggleLabel.textContent = details.open ? 'Hide policy' : 'View policy';
+  });
+
+  const summary = document.createElement('summary');
+  summary.className = 'policy-summary-header';
+
+  const icon = document.createElement('div');
+  icon.className = 'policy-summary-icon';
+  icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.8v5.4c0 4.8-3 8.9-7 10.3-4-1.4-7-5.5-7-10.3V5.8L12 3z"/></svg>';
+
+  const textWrap = document.createElement('div');
+  textWrap.className = 'policy-summary-text';
+  const titleEl = document.createElement('div');
+  titleEl.className = 'policy-summary-title';
+  titleEl.textContent = `Screening policy: ${draft.policy_name || 'Untitled policy'}`;
+
+  // Real counts from the actual catalog, not a static blurb - a category
+  // with an empty array still counts as a category (matches
+  // RISK_FACTOR_CATEGORY_LABELS' fixed 5 today), an edited/added factor
+  // changes this line the next time it renders.
+  const factorCount = Object.values(draft.risk_factor_catalog || {}).reduce(
+    (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+    0
+  );
+  const categoryCount = Object.keys(draft.risk_factor_catalog || {}).length;
+  const subtitleEl = document.createElement('div');
+  subtitleEl.className = 'policy-summary-subtitle';
+  subtitleEl.textContent = `Version ${draft.policy_version || '—'} · ${factorCount} risk factor${factorCount === 1 ? '' : 's'} across ${categoryCount} categor${categoryCount === 1 ? 'y' : 'ies'} · this case will be checked against it`;
+  textWrap.append(titleEl, subtitleEl);
+
+  const toggleWrap = document.createElement('div');
+  toggleWrap.className = 'policy-summary-toggle';
+  const toggleLabel = document.createElement('span');
+  toggleLabel.className = 'policy-summary-toggle-label';
+  toggleLabel.textContent = policyEditorExpanded ? 'Hide policy' : 'View policy';
+  const chevron = document.createElement('span');
+  chevron.className = 'policy-summary-chevron';
+  chevron.textContent = '⌄';
+  toggleWrap.append(toggleLabel, chevron);
+
+  summary.append(icon, textWrap, toggleWrap);
+  details.appendChild(summary);
+
+  const body = document.createElement('div');
+  body.className = 'policy-summary-body';
+  details.appendChild(body);
+  el.appendChild(details);
+
   // --- Overview ---
   const overviewSection = document.createElement('div');
   overviewSection.className = 'form-section';
@@ -2744,7 +2817,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
     disabled,
     onInput: (v) => { draft.framework_overview = v; },
   }));
-  el.appendChild(overviewSection);
+  body.appendChild(overviewSection);
 
   // --- Risk categories (LOW / MEDIUM / HIGH) ---
   const catSection = document.createElement('div');
@@ -2794,7 +2867,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
     catGrid.appendChild(block);
   });
   catSection.appendChild(catGrid);
-  el.appendChild(catSection);
+  body.appendChild(catSection);
 
   // --- Risk factor catalog: the add/remove-row editor itself ---
   const factorSection = document.createElement('div');
@@ -2821,7 +2894,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
 
     factorSection.appendChild(catWrap);
   });
-  el.appendChild(factorSection);
+  body.appendChild(factorSection);
 
   // --- Decision matrix ---
   const matrixSection = document.createElement('div');
@@ -2841,7 +2914,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
       onInput: (v) => { draft.decision_matrix[key] = v; },
     }));
   });
-  el.appendChild(matrixSection);
+  body.appendChild(matrixSection);
 
   // --- EDD requirements ---
   const eddSection = document.createElement('div');
@@ -2855,7 +2928,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
   eddList.className = 'string-list';
   eddSection.appendChild(eddList);
   renderStringList(eddList, draft.edd_requirements_if_referred, disabled, 'Requirement');
-  el.appendChild(eddSection);
+  body.appendChild(eddSection);
 
   // --- Reporting obligations ---
   const reportSection = document.createElement('div');
@@ -2869,7 +2942,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
   reportList.className = 'string-list';
   reportSection.appendChild(reportList);
   renderStringList(reportList, draft.reporting_obligations, disabled, 'Obligation');
-  el.appendChild(reportSection);
+  body.appendChild(reportSection);
 
   // --- Footer: last-updated stamp, and Save/Discard for a Compliance
   //     Officer only (see the comment at the top of this section) ---
@@ -2956,7 +3029,7 @@ function buildPolicyEditor(el, updatedAt, updatedBy) {
     footer.appendChild(btnRow);
   }
 
-  el.appendChild(footer);
+  body.appendChild(footer);
   updatePolicyEditorFooter();
 }
 
