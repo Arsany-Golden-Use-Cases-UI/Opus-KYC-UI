@@ -147,6 +147,40 @@ img {
   display: none;
 }
 
+/* Same understated text-link look as .header-back-btn above, but for a
+   button living in a page's own body rather than the shared app header
+   (ADDED 2026-09-09, for Case Detail / Review Detail's "Return to
+   previous page" - see the [data-view-panel="casedetail"] and
+   [data-view-panel="reviewlogdetail"] comments in index.html). Its own
+   class rather than reusing .header-back-btn because that one is a
+   single shared element wired to the role-gate "back" action specifically
+   - this needs its own element per panel, just the same visual style. */
+.page-back-link {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  background: none;
+  border: none;
+  margin: 0 0 0.75rem;
+  padding: 0.3rem 0.4rem;
+  padding-left: 0;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.page-back-link:hover,
+.page-back-link:focus-visible {
+  color: var(--color-blue);
+  text-decoration: underline;
+}
+
 /* Small connection-status pill in the header, echoing the "WORKFLOW
    LINKED" indicator from the reference dashboard - static/decorative
    (this app has one fixed workflow connection, not a settings screen to

@@ -596,6 +596,10 @@
              card. ============== -->
         <section class="view-panel" data-view-panel="casedetail" hidden>
           <p class="card-eyebrow">Banking KYC / Case Detail</p>
+          <!-- ADDED 2026-09-09 - Case Detail's only entry point is a Case
+               Queue row click (see openCaseDetail() in app.js), so "back"
+               always means Case Queue specifically, not browser history. -->
+          <button type="button" id="case-detail-back-btn" class="page-back-link">&larr; Return to previous page</button>
           <h1 class="page-title" id="case-detail-title">Case</h1>
           <p class="subtitle" id="case-detail-subtitle"></p>
 
@@ -730,6 +734,11 @@
         <section class="view-panel review-wide" data-view-panel="reviewlogdetail" hidden>
           <section class="card review-card">
             <p class="card-eyebrow">Banking KYC / Review Log</p>
+            <!-- ADDED 2026-09-09 - Review Detail's only entry point is a
+                 completed card on the Review Log tab (see
+                 openReviewLogDetail() in app.js), so "back" always means
+                 the Review Log specifically, not browser history. -->
+            <button type="button" id="reviewlog-detail-back-btn" class="page-back-link">&larr; Return to previous page</button>
             <h2 class="card-title" id="reviewlog-detail-title">Review</h2>
             <p class="subtitle" id="reviewlog-detail-subtitle"></p>
 

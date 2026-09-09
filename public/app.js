@@ -2371,6 +2371,14 @@ function openReviewLogDetail(entry) {
   switchToView('reviewlogdetail');
 }
 
+// "Return to previous page" (ADDED 2026-09-09) - both Case Detail and
+// Review Detail have exactly one entry point each (a Case Queue row and a
+// completed Review Log card, respectively - see loadAndShowCaseDetail()'s
+// and openReviewLogDetail()'s own comments), so "back" is just a fixed
+// switchToView() to that origin tab, not real browser-history navigation.
+document.getElementById('case-detail-back-btn')?.addEventListener('click', () => switchToView('queue'));
+document.getElementById('reviewlog-detail-back-btn')?.addEventListener('click', () => switchToView('pending'));
+
 // ============================================================
 // Case Detail: opened by clicking a Case Queue row. Both roles
 // can view (see the investigation this was built from - no server-side or
