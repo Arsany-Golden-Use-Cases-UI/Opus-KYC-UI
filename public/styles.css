@@ -164,6 +164,14 @@ img {
   align-items: center;
   gap: 0.35rem;
   width: auto;
+  /* Case Detail's version of this button is a direct child of
+     .view-panel (display:flex; flex-direction:column) - flex items
+     default to align-items:stretch, so without this it stretches to the
+     full column width instead of sizing to its own content (the bug
+     Arsany flagged 2026-09-09). Review Detail's copy sits inside .card,
+     a normal block container, so it was never affected - this just makes
+     both consistent regardless of which container they land in. */
+  align-self: flex-start;
   cursor: pointer;
   border: none;
   border-radius: 10px;
