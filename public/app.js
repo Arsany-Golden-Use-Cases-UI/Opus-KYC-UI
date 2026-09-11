@@ -6,18 +6,26 @@ const startBtn = document.getElementById('start-btn');
 // Reports, a Case Detail page, mid-way through New Intake, anywhere -
 // always landed back on this splash screen, because landingView/appView
 // visibility was only ever set by the click handler below, never
-// persisted anywhere. Tab-scoped (sessionStorage, not localStorage) to
-// match currentRole's own persistence just below - a brand new tab still
-// sees the splash once, only a same-tab refresh skips it. Wrapped in
-// try/catch for the same reason every other storage access in this file
-// is: a storage failure should degrade to "the splash just doesn't skip"
-// rather than break the click handler that already worked fine before
-// this was added.
+// persisted anywhere.
+// UPDATED 2026-09-11 (later same day): moved from sessionStorage to
+// localStorage, alongside currentRole's own persistence just below - a
+// brand new BROWSER TAB opened via a right-click "open in new tab" /
+// ctrl+click on a case or nav-item link (see buildDataTable()'s
+// getRowHref and the navItems click handler) now also skips the splash,
+// not just a same-tab refresh, since sessionStorage isn't actually copied
+// to a tab opened that way (only window.open() with a script-visible
+// opener gets that; a real "open in new tab" doesn't). See
+// clearRoleSession()'s own comment below for how this is deliberately
+// still reversible (a real sign-out) despite the switch off tab-scoping.
+// Wrapped in try/catch for the same reason every other storage access in
+// this file is: a storage failure should degrade to "the splash just
+// doesn't skip" rather than break the click handler that already worked
+// fine before this was added.
 const LANDING_DISMISSED_KEY = 'kyc-landing-dismissed';
 
 function markLandingDismissed() {
   try {
-    sessionStorage.setItem(LANDING_DISMISSED_KEY, '1');
+    localStorage.setItem(LANDING_DISMISSED_KEY, '1');
   } catch (err) {
     console.error('landing dismissed save error', err);
   }
@@ -25,7 +33,7 @@ function markLandingDismissed() {
 
 function wasLandingDismissed() {
   try {
-    return sessionStorage.getItem(LANDING_DISMISSED_KEY) === '1';
+    return localStorage.getItem(LANDING_DISMISSED_KEY) === '1';
   } catch (err) {
     console.error('landing dismissed read error', err);
     return false;
@@ -50,14 +58,12 @@ if (wasLandingDismissed()) {
 // ============================================================
 // Role gate: who is running this case? (KYC Agent / Compliance Officer)
 // ============================================================
-// currentRole survives a refresh, but only within this browser tab: it's
-// mirrored into sessionStorage (see saveRoleSession() below), NOT
-// localStorage, so closing the tab or the browser drops it and a shared
-// compliance workstation doesn't stay verified indefinitely. Only the
-// verified role and name are stored - never the password. See server.js's
-// /api/verify-role comment: this is a client-side UI gate only, not real
-// access control on the routes it's meant to protect, and persisting it
-// doesn't change that either way.
+// currentRole survives a refresh, and now (see UPDATED note below) a
+// brand new tab too - it's mirrored into localStorage (see
+// saveRoleSession() below). Only the verified role and name are stored -
+// never the password. See server.js's /api/verify-role comment: this is a
+// client-side UI gate only, not real access control on the routes it's
+// meant to protect, and persisting it doesn't change that either way.
 let currentRole = null;
 // Free-text, required alongside the password - tracked with every case a
 // person runs or reviews (see the ranBy/reviewedBy fields sent alongside
@@ -77,9 +83,21 @@ const roleGatePasswordInput = document.getElementById('role-gate-password');
 const roleGateError = document.getElementById('role-gate-error');
 const roleGateSubmitBtn = document.getElementById('role-gate-submit-btn');
 
-// Tab-scoped persistence of a verified role, so a refresh doesn't send
-// someone back through the gate they cleared seconds ago. Stores only
-// { role, name } - the password is never written anywhere.
+// UPDATED 2026-09-11 - moved from sessionStorage to localStorage, so a
+// verified role now carries over to every tab in this browser, including
+// one opened via a right-click "open in new tab" on a case or nav-item
+// link (see buildDataTable()'s getRowHref and the navItems click handler
+// near switchToView()) - sessionStorage looked tab-scoped-by-design, but
+// in practice a tab opened that way starts with none of it copied over
+// (only window.open() with a live opener reference gets an initial copy;
+// a real "open in new tab" doesn't), so every such link was landing back
+// on the splash + role gate instead of the page it pointed to. Persisting
+// wider than one tab does mean a shared compliance workstation stays
+// verified until someone explicitly signs out - see backToRoleSelection()
+// (the "Back to role selection" button), which calls clearRoleSession()
+// precisely so that reset is still real and immediate, not merely
+// "wait for every tab to close." Stores only { role, name } - the
+// password is never written anywhere.
 const ROLE_SESSION_KEY = 'kyc-role-session';
 
 // Keep in sync with the two role-choice buttons above and server.js's
@@ -88,14 +106,14 @@ const ROLE_SESSION_KEY = 'kyc-role-session';
 // as no session at all rather than trusted blindly.
 const VALID_ROLES = ['agent', 'manager'];
 
-// Every one of these wraps storage access in try/catch: sessionStorage
+// Every one of these wraps storage access in try/catch: localStorage
 // itself can throw (private mode, storage disabled, sandboxed iframe),
 // and a storage failure should degrade to "the gate just doesn't persist"
 // rather than breaking the gate - or, on write, failing a verification
 // that has already succeeded.
 function saveRoleSession(role, name) {
   try {
-    sessionStorage.setItem(ROLE_SESSION_KEY, JSON.stringify({ role, name }));
+    localStorage.setItem(ROLE_SESSION_KEY, JSON.stringify({ role, name }));
   } catch (err) {
     console.error('role session save error', err);
   }
@@ -103,21 +121,21 @@ function saveRoleSession(role, name) {
 
 function clearRoleSession() {
   try {
-    sessionStorage.removeItem(ROLE_SESSION_KEY);
+    localStorage.removeItem(ROLE_SESSION_KEY);
   } catch (err) {
     console.error('role session clear error', err);
   }
 }
 
 // Restores currentRole/currentUserName from a previous verification in
-// this tab. Returns true only if a usable session was found, so the
+// this browser. Returns true only if a usable session was found, so the
 // caller knows whether to skip the gate. Anything malformed is dropped
 // rather than left to linger - same fall-back-to-a-known-good-state
 // approach as the screening policy's corrupt-value guard in server.js.
 function restoreRoleSession() {
   let raw;
   try {
-    raw = sessionStorage.getItem(ROLE_SESSION_KEY);
+    raw = localStorage.getItem(ROLE_SESSION_KEY);
   } catch (err) {
     console.error('role session read error', err);
     return false;
@@ -233,9 +251,10 @@ roleGateSubmitBtn.addEventListener('click', async () => {
     if (res.ok && data.ok) {
       currentRole = pendingRoleChoice;
       currentUserName = name;
-      // Mirrored to sessionStorage here, in the one place the role is
-      // actually verified, so a refresh in this tab can skip the gate -
-      // see the bootstrap at the bottom of this file.
+      // Mirrored to localStorage here, in the one place the role is
+      // actually verified, so a refresh (or a new tab - see
+      // ROLE_SESSION_KEY's comment above) can skip the gate - see the
+      // bootstrap at the bottom of this file.
       saveRoleSession(currentRole, currentUserName);
       applyRoleRestrictions();
       const onVerified = roleGateOnVerified;
