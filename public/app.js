@@ -440,8 +440,20 @@ function loadViewData(viewName) {
   }
 }
 
+// Sidebar items are real <a href="?view=..."> elements (see index.html),
+// not plain buttons, so right-click offers "open link in new tab"/"copy
+// link" and ctrl/cmd/middle-click open one - restoreViewFromUrl() rebuilds
+// the same tab from that URL on load, same mechanism as the Case Queue
+// row links (see buildDataTable()'s getRowHref). A plain click still stays
+// in this tab and goes through switchToView() with no page reload; a
+// modified click is left alone so the browser's own new-tab/new-window
+// handling takes over instead.
 navItems.forEach((btn) => {
-  btn.addEventListener('click', () => switchToView(btn.dataset.view));
+  btn.addEventListener('click', (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    switchToView(btn.dataset.view);
+  });
 });
 
 const intakeFormCard = document.getElementById('intake-form-card');

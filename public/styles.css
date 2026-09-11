@@ -554,7 +554,13 @@ img {
   padding: 0 0.7rem;
 }
 
-.nav-item {
+/* Real <a href> elements now (see index.html), not <button> - needed so
+   right-click offers "open link in new tab"/"copy link" (see app.js's
+   navItems click handler). text-decoration/:visited are reset here since
+   neither is covered by the properties below - everything else about a
+   link's default UA styling was already fully overridden by this rule. */
+.nav-item,
+.nav-item:visited {
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -562,6 +568,7 @@ img {
   overflow: hidden;
   white-space: nowrap;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   background: none;
   border: none;
