@@ -770,16 +770,45 @@
               <h1 class="page-title">Management information</h1>
               <p class="subtitle" id="reports-subtitle">This calendar month, computed from real case history.</p>
             </div>
-            <!-- Was fixed to "this calendar month" only - see
-                 getReportsRangeBounds() in app.js for the three windows
-                 this drives, each paired with the immediately preceding
-                 equal-length window so the stat tiles below can show a
-                 real vs.-last-period trend instead of a bare snapshot. -->
-            <select id="reports-range-select" class="reports-range-select">
-              <option value="thisMonth">This calendar month</option>
-              <option value="lastMonth">Last calendar month</option>
-              <option value="last90">Last 90 days</option>
-            </select>
+            <!-- REPLACED 2026-09-11 the old single <select> ("this
+                 calendar month"/"last calendar month"/"last 90 days")
+                 with two modes - see getReportsRangeBounds() in app.js for
+                 all four windows this now drives, each still paired with
+                 the immediately preceding equal-length window so the stat
+                 tiles below can show a real vs.-last-period trend instead
+                 of a bare snapshot. initReportsRangeControl() in app.js
+                 wires all of the below. -->
+            <div class="reports-range-control">
+              <div class="reports-range-mode-toggle">
+                <button type="button" id="reports-range-mode-quick" class="reports-range-mode-btn reports-range-mode-btn--active" aria-pressed="true">Quick range</button>
+                <button type="button" id="reports-range-mode-custom" class="reports-range-mode-btn" aria-pressed="false">Custom range</button>
+              </div>
+
+              <!-- Mode 1: a small preset picker - This month / Last month /
+                   Last quarter - reusing the same .filter-pill look Case
+                   Queue's status filter already established. -->
+              <div id="reports-range-quick" class="filter-pill-row reports-range-quick">
+                <button type="button" class="filter-pill filter-pill--active" data-range="thisMonth">This month</button>
+                <button type="button" class="filter-pill" data-range="lastMonth">Last month</button>
+                <button type="button" class="filter-pill" data-range="lastQuarter">Last quarter</button>
+              </div>
+
+              <!-- Mode 2: an actual calendar to pick real From/To dates -
+                   native <input type="date"> (same control New Intake's
+                   Date of Birth field already uses, so it's already styled
+                   and already gives a real calendar picker via its native
+                   icon), applied on demand rather than on every keystroke/
+                   date-pick so a half-chosen range never triggers a
+                   confusing intermediate render. -->
+              <div id="reports-range-custom" class="reports-range-custom" hidden>
+                <label class="reports-range-custom-label" for="reports-range-from">From</label>
+                <input type="date" id="reports-range-from">
+                <label class="reports-range-custom-label" for="reports-range-to">To</label>
+                <input type="date" id="reports-range-to">
+                <button type="button" id="reports-range-apply-btn" class="reports-range-apply-btn">Apply</button>
+              </div>
+              <div id="reports-range-error" class="error-banner reports-range-error" hidden></div>
+            </div>
           </div>
 
           <div id="reports-stats" class="stat-tile-row"></div>

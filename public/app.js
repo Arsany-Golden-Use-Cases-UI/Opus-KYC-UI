@@ -2745,26 +2745,60 @@ const REPORTS_OUTCOME_COLORS = {
 // vs.-previous-period trend rather than a bare snapshot - see
 // computeReportsStatsForWindow() below, run twice per render (once per
 // window), not sample data.
-function getReportsRangeBounds(range, now = new Date()) {
+//
+// UPDATED 2026-09-11: replaced the "Last 90 days" preset with "Last
+// quarter" (previous calendar quarter, e.g. Q2 if today is in Q3 - same
+// calendar-boundary convention thisMonth/lastMonth already use, rather
+// than a rolling 90-day window), and added a 'custom' range for the new
+// From/To calendar picker (see initReportsRangeControl() below) -
+// customStart/customEnd are only read for that branch, real Date objects
+// straight from the two <input type="date"> fields.
+function getReportsRangeBounds(range, now = new Date(), customStart = null, customEnd = null) {
   if (range === 'lastMonth') {
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const end = new Date(now.getFullYear(), now.getMonth(), 1);
     const prevStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
     return { start, end, prevStart, prevEnd: start, subtitle: 'Last calendar month, computed from real case history.' };
   }
-  if (range === 'last90') {
+  if (range === 'lastQuarter') {
+    // Quarters are 0-2/3-5/6-8/9-11 - flooring the current month to a
+    // quarter-start month and stepping back 3 lands on last quarter's
+    // start regardless of which month of the current quarter "now" is in.
+    // Date's month rollover (a negative month argument) correctly walks
+    // back into the previous year when the current quarter is Q1.
+    const currentQuarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    const start = new Date(now.getFullYear(), currentQuarterStartMonth - 3, 1);
+    const end = new Date(now.getFullYear(), currentQuarterStartMonth, 1);
+    const prevStart = new Date(now.getFullYear(), currentQuarterStartMonth - 6, 1);
+    return { start, end, prevStart, prevEnd: start, subtitle: 'Last calendar quarter, computed from real case history.' };
+  }
+  if (range === 'custom' && customStart && customEnd) {
     const dayMs = 24 * 60 * 60 * 1000;
-    const end = now;
-    const start = new Date(now.getTime() - 90 * dayMs);
+    const start = customStart;
+    // The "To" date picked is meant to be inclusive (the whole day), but
+    // every window elsewhere in this function is a half-open [start, end)
+    // range (see computeReportsStatsForWindow()'s `d < end` check) - push
+    // the boundary to the start of the NEXT day so a case submitted any
+    // time on the "To" date itself is still counted.
+    const end = new Date(customEnd.getTime() + dayMs);
     const prevEnd = start;
-    const prevStart = new Date(start.getTime() - 90 * dayMs);
-    return { start, end, prevStart, prevEnd, subtitle: 'The last 90 days, computed from real case history.' };
+    const prevStart = new Date(start.getTime() - (end.getTime() - start.getTime()));
+    const subtitle = `${formatDateOnly(customStart)} – ${formatDateOnly(customEnd)}, computed from real case history.`;
+    return { start, end, prevStart, prevEnd, subtitle };
   }
   // default: thisMonth
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   return { start, end, prevStart, prevEnd: start, subtitle: 'This calendar month, computed from real case history.' };
+}
+
+// Plain "Sep 3, 2026" formatting for the custom range's subtitle -
+// formatTimestamp() (used everywhere else) always includes a time-of-day,
+// which reads oddly for a date the user picked from a date-only <input
+// type="date">.
+function formatDateOnly(d) {
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // Same COMPLETED-only scoping computeReportsStats always used (an
@@ -3058,13 +3092,19 @@ function renderReportsTrendChart(containerId, buckets) {
 // Reports tab by renderReports() (called from loadViewData()).
 let reportsEntriesCache = [];
 let reportsRange = 'thisMonth';
+// Only meaningful when reportsRange === 'custom' - the two dates last
+// applied from the Custom range tab's From/To <input type="date">
+// fields (see initReportsRangeControl() below). Real Date objects, not
+// strings, so getReportsRangeBounds() can use them directly.
+let reportsCustomStart = null;
+let reportsCustomEnd = null;
 
 function renderReportsContent() {
   const statsEl = document.getElementById('reports-stats');
   const breakdownsEl = document.getElementById('reports-breakdowns');
   if (!statsEl || !breakdownsEl) return;
 
-  const bounds = getReportsRangeBounds(reportsRange);
+  const bounds = getReportsRangeBounds(reportsRange, new Date(), reportsCustomStart, reportsCustomEnd);
   const subtitleEl = document.getElementById('reports-subtitle');
   if (subtitleEl) subtitleEl.textContent = bounds.subtitle;
 
@@ -3101,11 +3141,85 @@ async function renderReports() {
   renderReportsContent();
 }
 
-(function initReportsRangeSelect() {
-  const select = document.getElementById('reports-range-select');
-  if (!select) return;
-  select.addEventListener('change', () => {
-    reportsRange = select.value;
+// REPLACED 2026-09-11 the old single <select>'s change-listener with the
+// two-mode range control: a Quick range/Custom range tab toggle, three
+// preset pills for the quick side, and a From/To calendar pair (native
+// <input type="date">, which already gives a real calendar popup via its
+// built-in icon - see index.html's .reports-range-control markup) for the
+// custom side, applied via its own button rather than on every keystroke.
+(function initReportsRangeControl() {
+  const modeQuickBtn = document.getElementById('reports-range-mode-quick');
+  const modeCustomBtn = document.getElementById('reports-range-mode-custom');
+  const quickPanel = document.getElementById('reports-range-quick');
+  const customPanel = document.getElementById('reports-range-custom');
+  const fromInput = document.getElementById('reports-range-from');
+  const toInput = document.getElementById('reports-range-to');
+  const applyBtn = document.getElementById('reports-range-apply-btn');
+  const errorEl = document.getElementById('reports-range-error');
+  if (!modeQuickBtn || !modeCustomBtn || !quickPanel || !customPanel || !fromInput || !toInput || !applyBtn) return;
+
+  function showError(message) {
+    if (!errorEl) return;
+    errorEl.textContent = message;
+    errorEl.hidden = false;
+  }
+
+  function clearError() {
+    if (!errorEl) return;
+    errorEl.hidden = true;
+    errorEl.textContent = '';
+  }
+
+  // Switching modes only changes which controls are visible - it doesn't
+  // touch reportsRange or re-render by itself. Landing on Custom range
+  // with nothing applied yet just leaves whatever quick preset was last
+  // showing (Reports doesn't go blank while you're mid-pick).
+  function setMode(mode) {
+    const isQuick = mode === 'quick';
+    modeQuickBtn.classList.toggle('reports-range-mode-btn--active', isQuick);
+    modeQuickBtn.setAttribute('aria-pressed', String(isQuick));
+    modeCustomBtn.classList.toggle('reports-range-mode-btn--active', !isQuick);
+    modeCustomBtn.setAttribute('aria-pressed', String(!isQuick));
+    quickPanel.hidden = !isQuick;
+    customPanel.hidden = isQuick;
+    clearError();
+  }
+
+  modeQuickBtn.addEventListener('click', () => setMode('quick'));
+  modeCustomBtn.addEventListener('click', () => setMode('custom'));
+
+  Array.from(quickPanel.querySelectorAll('.filter-pill')).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (reportsRange === btn.dataset.range) return;
+      reportsRange = btn.dataset.range;
+      Array.from(quickPanel.querySelectorAll('.filter-pill')).forEach((pill) => {
+        pill.classList.toggle('filter-pill--active', pill === btn);
+      });
+      renderReportsContent();
+    });
+  });
+
+  applyBtn.addEventListener('click', () => {
+    clearError();
+    if (!fromInput.value || !toInput.value) {
+      showError('Pick both a From and a To date.');
+      return;
+    }
+    // Parsed as local-midnight-of-that-day, same as the date-of-birth
+    // field elsewhere treats an <input type="date"> value - not UTC
+    // midnight, which could otherwise land the date a day early/late
+    // depending on the browser's timezone.
+    const [fromY, fromM, fromD] = fromInput.value.split('-').map(Number);
+    const [toY, toM, toD] = toInput.value.split('-').map(Number);
+    const start = new Date(fromY, fromM - 1, fromD);
+    const end = new Date(toY, toM - 1, toD);
+    if (start > end) {
+      showError('The From date must be on or before the To date.');
+      return;
+    }
+    reportsCustomStart = start;
+    reportsCustomEnd = end;
+    reportsRange = 'custom';
     renderReportsContent();
   });
 })();
