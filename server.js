@@ -455,6 +455,38 @@ app.post('/api/run', async (req, res) => {
   }
 });
 
+// ADDED 2026-09-11 - real completion time straight from Opus (GET
+// /job/{id}'s own `finishedAt`), not the moment THIS server happened to
+// notice the job was done. `completedAt` used to always be
+// `new Date().toISOString()` stamped at whatever instant this endpoint
+// got polled - but the browser only polls a given job while a page
+// showing it is actually open (New Intake mid-run, or a Case Detail
+// panel), so a job nobody was watching right when it finished picked up
+// whatever much-later moment someone eventually reopened that case,
+// making Case Queue's Duration column and Reports' Avg. Turnaround
+// balloon into hours (or days) of pure polling-gap, not real elapsed
+// time. Confirmed live against job 74834: Opus's own dashboard and this
+// exact field say the run actually took ~4m51s (createdAt
+// 2026-09-09T12:06:08.158Z -> finishedAt 12:10:59.658Z), while this
+// endpoint had previously stamped completedAt some 19 hours later.
+// (workflowEstimation.workflow_time, the other candidate field docs
+// mention, was checked against this same job and does NOT match - 225000ms
+// vs. the real ~291500ms - so it's a pre-run estimate, not actual
+// runtime; finishedAt is the one that's been verified correct.)
+// Best-effort: any failure here (a flaky call, or an older job with no
+// finishedAt) falls back to "now", the exact previous behavior, rather
+// than blocking the status response the frontend is waiting on.
+async function fetchOpusFinishedAt(jobId) {
+  try {
+    const detailRes = await opusFetch(`/job/${jobId}`);
+    const detail = await detailRes.json();
+    return detail.finishedAt || null;
+  } catch (err) {
+    console.error('opus job detail fetch error (finishedAt)', err);
+    return null;
+  }
+}
+
 app.get('/api/run/:id', async (req, res) => {
   try {
     const jobId = req.params.id;
@@ -471,12 +503,14 @@ app.get('/api/run/:id', async (req, res) => {
         outputs[key] = jobResultsPayloadSchema?.[varName]?.value ?? null;
       }
 
+      const finishedAt = await fetchOpusFinishedAt(jobId);
+
       try {
         await updateHistoryEntry(jobId, {
           status,
           finalDecision: outputs.finalDecision ?? null,
           routingFlag: outputs.routingFlag ?? null,
-          completedAt: new Date().toISOString(),
+          completedAt: finishedAt || new Date().toISOString(),
         });
       } catch (historyErr) {
         console.error('case history update error', historyErr);
@@ -489,8 +523,10 @@ app.get('/api/run/:id', async (req, res) => {
       const auditRes = await opusFetch(`/job/${jobId}/audit`);
       const audit = await auditRes.json();
 
+      const finishedAt = await fetchOpusFinishedAt(jobId);
+
       try {
-        await updateHistoryEntry(jobId, { status, completedAt: new Date().toISOString() });
+        await updateHistoryEntry(jobId, { status, completedAt: finishedAt || new Date().toISOString() });
       } catch (historyErr) {
         console.error('case history update error', historyErr);
       }
