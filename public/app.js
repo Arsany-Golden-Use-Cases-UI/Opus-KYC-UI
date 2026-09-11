@@ -973,6 +973,44 @@ document.querySelectorAll('.sample-scenario-card').forEach((btn) => {
   btn.addEventListener('click', () => applySampleScenario(btn.dataset.sample));
 });
 
+// "Clear form" (sample scenarios sidebar) - ADDED 2026-09-11. Blanks
+// every applicant/contact/employment/account field and both file
+// inputs, for someone undoing a sample scenario (or just starting over)
+// before entering a real case by hand. Reuses SAMPLE_SCENARIOS.clean's
+// own field/check id lists rather than a second hardcoded copy of every
+// af-* id, so the two can't quietly drift apart if a field is ever
+// added or renamed. Deliberately does NOT touch the Screening Policy
+// editor further down the same <form> - that's a separate saved
+// document (see buildPolicyEditor()'s own draft state), and a native
+// form.reset() would visually blank its fields too without updating
+// settingsPolicyDraft to match, leaving the two out of sync.
+const INTAKE_TEXT_FIELD_IDS = Object.keys(SAMPLE_SCENARIOS.clean.fields);
+const INTAKE_CHECK_FIELD_IDS = Object.keys(SAMPLE_SCENARIOS.clean.checks);
+const clearIntakeFormBtn = document.getElementById('clear-intake-form-btn');
+
+function clearIntakeForm() {
+  INTAKE_TEXT_FIELD_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  INTAKE_CHECK_FIELD_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  // Direct assignment can't set a file input to an arbitrary file, but
+  // '' is the one value browsers do accept, and it's exactly what
+  // clearing a selection means.
+  const idDocumentInput = document.getElementById('id-document');
+  const proofOfAddressInput = document.getElementById('proof-of-address');
+  if (idDocumentInput) idDocumentInput.value = '';
+  if (proofOfAddressInput) proofOfAddressInput.value = '';
+  if (sampleScenarioLoadedNote) sampleScenarioLoadedNote.textContent = 'Form cleared.';
+}
+
+if (clearIntakeFormBtn) {
+  clearIntakeFormBtn.addEventListener('click', clearIntakeForm);
+}
+
 // Assembles the Application Form JSON from the structured intake fields
 // that replaced what used to be one raw textarea (see the af-* inputs in
 // index.html). Every key in the shape is written unconditionally from this

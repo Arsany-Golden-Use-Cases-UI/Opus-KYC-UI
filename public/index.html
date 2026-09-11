@@ -633,6 +633,13 @@
                 </button>
               </div>
               <p class="sample-scenario-note" id="sample-scenario-loaded"></p>
+              <!-- "Clear form" - ADDED 2026-09-11, for undoing a sample
+                   scenario (or just starting over) before entering a real
+                   case by hand. See clearIntakeForm() in app.js - blanks
+                   every applicant/contact/employment/account field plus
+                   both file inputs, but deliberately leaves the Screening
+                   Policy editor further down the form alone. -->
+              <button type="button" id="clear-intake-form-btn" class="btn btn-secondary sample-scenarios-clear-btn">Clear form</button>
             </section>
           </aside>
         </section>

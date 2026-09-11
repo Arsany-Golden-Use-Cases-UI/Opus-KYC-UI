@@ -2800,6 +2800,14 @@ details summary {
   display: none;
 }
 
+/* "Clear form" (sample scenarios sidebar) - ADDED 2026-09-11. Full width
+   to match the two scenario cards above it rather than shrinking to its
+   label's width, which would look stranded in this narrow (320px)
+   column. */
+.sample-scenarios-clear-btn {
+  width: 100%;
+}
+
 .factor-row {
   border: 1px solid var(--color-border);
   border-radius: 12px;
