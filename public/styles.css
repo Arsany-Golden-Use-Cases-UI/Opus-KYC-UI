@@ -1829,14 +1829,28 @@ details summary {
 }
 
 /* Case Queue rows - opens Case Detail (or the review form) on click -
-   see buildDataTable()'s onRowClick param. */
+   see buildDataTable()'s onRowClick param. position:relative makes this
+   row the containing block for its .row-stretch-link, if it has one. */
 .data-table-row-clickable {
+  position: relative;
   cursor: pointer;
 }
 
 .data-table-row-clickable:hover,
 .data-table-row-clickable:focus-visible {
   background: var(--color-surface-muted);
+}
+
+/* Stretched-link overlay - see buildDataTable()'s getRowHref param. Lives
+   inside the row's first <td> in the DOM (a <tr> can't hold an <a>
+   directly) but covers the whole row visually via inset:0 against the
+   position:relative row above, so right-click/ctrl+click/middle-click
+   anywhere in the row hit a real <a href>. No background/border of its own
+   - it's invisible, purely a click/context-menu target sitting over the
+   existing cell content. */
+.row-stretch-link {
+  position: absolute;
+  inset: 0;
 }
 
 /* ---------- Review Log (RENAMED 2026-09-09 from "Pending Reviews" -

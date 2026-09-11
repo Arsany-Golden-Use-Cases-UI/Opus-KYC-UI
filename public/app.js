@@ -1899,8 +1899,12 @@ function buildBadgeSpan(value, toneOverride) {
 
 // onRowClick is optional - passing none leaves rows inert, no row
 // highlighting or click handling (see renderCaseTable() below for the
-// only current caller, which always passes one).
-function buildDataTable(columns, rows, emptyMessage, onRowClick) {
+// only current caller, which always passes one). getRowHref is also
+// optional - when it returns a URL for a row, that row gets a real link
+// stretched over it (see the stretched-link block below), so right-click
+// offers "open link in new tab"/"copy link" and ctrl/cmd/middle-click open
+// a new tab, on top of the existing plain-click behavior.
+function buildDataTable(columns, rows, emptyMessage, onRowClick, getRowHref) {
   const wrap = document.createElement('div');
 
   if (!rows.length) {
@@ -1949,6 +1953,35 @@ function buildDataTable(columns, rows, emptyMessage, onRowClick) {
       }
       tr.appendChild(td);
     });
+
+    // Stretched-link pattern: a real <a href> laid over the whole row (its
+    // containing block is the position:relative tr set via
+    // data-table-row-clickable above), nested inside the first <td> since a
+    // <tr> can only contain <td>/<th> directly. tabIndex -1 and
+    // aria-hidden keep it out of the tab order and off screen readers -
+    // the tr itself already covers keyboard/AT access (role="button",
+    // tabIndex, Enter/Space, right above). A plain left click still runs
+    // onRowClick() with no page reload, same as before; ctrl/cmd/shift+click
+    // or the browser's own "open link in new tab"/"copy link" (right-click)
+    // fall through to the anchor's real href instead.
+    const rowHref = onRowClick && getRowHref ? getRowHref(row) : null;
+    if (rowHref) {
+      const link = document.createElement('a');
+      link.href = rowHref;
+      link.className = 'row-stretch-link';
+      link.tabIndex = -1;
+      link.setAttribute('aria-hidden', 'true');
+      link.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const opensElsewhere = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
+        if (!opensElsewhere) {
+          e.preventDefault();
+          onRowClick(row);
+        }
+      });
+      tr.firstElementChild.appendChild(link);
+    }
+
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
@@ -2248,7 +2281,7 @@ function renderQueueTableFromCache() {
     : 'No cases have been run through this console yet.';
 
   wrap.innerHTML = '';
-  wrap.appendChild(buildDataTable(CASE_TABLE_COLUMNS, filtered, emptyMessage, openCaseDetail));
+  wrap.appendChild(buildDataTable(CASE_TABLE_COLUMNS, filtered, emptyMessage, openCaseDetail, caseQueueRowHref));
 }
 
 async function renderCaseTable(tableWrapId, statsContainerId) {
@@ -2516,6 +2549,22 @@ function resetCaseDetailPanel() {
 // callers to have checked currentRole === 'manager' first, exactly as
 // this does. Every other case (including WAITING_REVIEW for anyone else)
 // goes through loadAndShowCaseDetail().
+// Same-destination URL loadAndShowCaseDetail() already puts in the address
+// bar via setViewInUrl(), so a Case Queue row's link and its plain-click
+// behavior always agree, and restoreViewFromUrl() can rebuild the exact
+// same panel from it on a fresh load (e.g. a right-click "open in new
+// tab"). Returns null - no link for that row - for a WAITING_REVIEW case a
+// manager would click into the interactive review form instead (see
+// openCaseDetail() below): that flow has never had a URL representation to
+// restore from, so no href for it would be safe to hand out.
+function caseQueueRowHref(entry) {
+  if (entry.status === 'WAITING_REVIEW' && currentRole === 'manager') return null;
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', 'casedetail');
+  url.searchParams.set('case', entry.jobId);
+  return url.toString();
+}
+
 function openCaseDetail(entry) {
   if (entry.status === 'WAITING_REVIEW' && currentRole === 'manager') {
     // Same reset-before-load convention openPendingReview() uses - clears
