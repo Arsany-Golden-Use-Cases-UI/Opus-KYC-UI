@@ -1899,12 +1899,23 @@ function escapeHtml(str) {
 // ============================================================
 // Case Queue: real history from /api/case-history.
 // ============================================================
+// UPDATED 2026-09-11 - added an hours tier. Below 1 minute: seconds only
+// ("35s"). 1 minute up to 1 hour: minutes + seconds, unchanged from
+// before ("47m 35s"). 1 hour or more: hours + minutes, dropping seconds
+// (too fine-grained once a figure is already multiple hours) - without
+// this, a long-running or backlogged case (or an average across a wide
+// custom date range - see getReportsRangeBounds()) just kept accumulating
+// minutes forever (e.g. "847m 35s" instead of "14h 7m"). Shared by every
+// caller (Case Queue's Duration column, Reports' Avg. Turnaround tile) -
+// one duration format across the whole app rather than two.
 function formatDuration(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds}s`;
-  return `${minutes}m ${seconds}s`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }
 
 function formatTimestamp(iso) {
