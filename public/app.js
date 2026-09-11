@@ -2,10 +2,50 @@ const landingView = document.getElementById('landing-view');
 const appView = document.getElementById('app-view');
 const startBtn = document.getElementById('start-btn');
 
+// ADDED 2026-09-11. Without this, a refresh at ANY stage - Case Queue,
+// Reports, a Case Detail page, mid-way through New Intake, anywhere -
+// always landed back on this splash screen, because landingView/appView
+// visibility was only ever set by the click handler below, never
+// persisted anywhere. Tab-scoped (sessionStorage, not localStorage) to
+// match currentRole's own persistence just below - a brand new tab still
+// sees the splash once, only a same-tab refresh skips it. Wrapped in
+// try/catch for the same reason every other storage access in this file
+// is: a storage failure should degrade to "the splash just doesn't skip"
+// rather than break the click handler that already worked fine before
+// this was added.
+const LANDING_DISMISSED_KEY = 'kyc-landing-dismissed';
+
+function markLandingDismissed() {
+  try {
+    sessionStorage.setItem(LANDING_DISMISSED_KEY, '1');
+  } catch (err) {
+    console.error('landing dismissed save error', err);
+  }
+}
+
+function wasLandingDismissed() {
+  try {
+    return sessionStorage.getItem(LANDING_DISMISSED_KEY) === '1';
+  } catch (err) {
+    console.error('landing dismissed read error', err);
+    return false;
+  }
+}
+
 startBtn.addEventListener('click', () => {
   landingView.hidden = true;
   appView.hidden = false;
+  markLandingDismissed();
 });
+
+// A same-tab refresh past this point (this session already saw the
+// splash and clicked through) - skip straight to the app shell. The role
+// gate and whichever tab/case was open are restored separately, further
+// down, once the rest of the app has finished defining itself.
+if (wasLandingDismissed()) {
+  landingView.hidden = true;
+  appView.hidden = false;
+}
 
 // ============================================================
 // Role gate: who is running this case? (KYC Agent / Compliance Officer)
@@ -257,6 +297,15 @@ const VIEW_TITLES = {
 // static mock data) doesn't change within a single page load.
 const viewLoaded = {};
 
+// ADDED 2026-09-11. The subset of VIEW_TITLES that switchToView() mirrors
+// into the URL's `view` param (see setViewInUrl()) so a refresh can
+// restore them - the five tab-bar views only. casedetail/reviewlogdetail
+// go in the URL too, but with a case id attached, so they set it
+// themselves rather than through this generic path; 'review' never goes
+// in the URL at all. See restoreViewFromUrl() at the bottom of this file
+// for the other half of this.
+const VIEW_RESTORABLE_TABS = new Set(['queue', 'intake', 'pending', 'reports', 'settings']);
+
 // data-roles is a comma-separated list of roles allowed to see a given nav
 // item (e.g. "agent,manager" or "manager") - see applyRoleRestrictions()
 // further down. No data-roles attribute at all means "visible to
@@ -305,6 +354,15 @@ function switchToView(viewName) {
     panel.hidden = panel.dataset.viewPanel !== viewName;
   });
   headerViewTitle.textContent = VIEW_TITLES[viewName];
+
+  // ADDED 2026-09-11. Only the five tab-bar views get written here - the
+  // two standalone detail panels (casedetail, reviewlogdetail) set the URL
+  // themselves right after this, with the case's jobId attached (see
+  // loadAndShowCaseDetail() and openReviewLogDetail()), and 'review' is
+  // deliberately never written at all (see setViewInUrl()'s own comment).
+  if (VIEW_RESTORABLE_TABS.has(viewName)) {
+    setViewInUrl(viewName);
+  }
 
   if (!viewLoaded[viewName]) {
     viewLoaded[viewName] = true;
@@ -1556,6 +1614,26 @@ function setJobIdInUrl(jobId) {
   history.replaceState(null, '', url);
 }
 
+// ADDED 2026-09-11. Same idea as setJobIdInUrl() above, but for which
+// tab/panel is on screen, so a refresh doesn't just skip the splash (see
+// wasLandingDismissed() near the top of this file) but also comes back to
+// the same page rather than defaulting to New Intake every time. `caseId`
+// is only meaningful for the two standalone detail panels (casedetail,
+// reviewlogdetail) - a plain tab clears it. Deliberately never called
+// with 'review' (see switchToView()'s own call site below): that panel
+// is reached mid-poll or from a one-off click and has no case-history
+// record to rebuild it from on a fresh load, unlike the other two.
+function setViewInUrl(viewName, caseId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', viewName);
+  if (caseId) {
+    url.searchParams.set('case', caseId);
+  } else {
+    url.searchParams.delete('case');
+  }
+  history.replaceState(null, '', url);
+}
+
 function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer);
@@ -2369,6 +2447,10 @@ function openReviewLogDetail(entry) {
   renderReviewInputs(record.inputs || {}, 'reviewlog-detail-inputs');
 
   switchToView('reviewlogdetail');
+  // ADDED 2026-09-11 - see setViewInUrl()'s comment: this is the one of
+  // the two detail panels that carries a case id in the URL, so a refresh
+  // lands back on this exact case's Review Detail rather than New Intake.
+  setViewInUrl('reviewlogdetail', entry.jobId);
 }
 
 // "Return to previous page" (ADDED 2026-09-09) - both Case Detail and
@@ -2460,6 +2542,9 @@ async function loadAndShowCaseDetail(jobId, entry) {
   caseDetailJobId = jobId;
   resetCaseDetailPanel();
   switchToView('casedetail');
+  // ADDED 2026-09-11 - see setViewInUrl()'s comment: the other detail
+  // panel that carries a case id in the URL, for the same reason.
+  setViewInUrl('casedetail', jobId);
 
   caseDetailTitle.textContent = entry.applicantName || entry.title || `Case ${jobId}`;
   let subtitle = `Case ${jobId} · Submitted ${formatTimestamp(entry.submittedAt)}`;
@@ -3710,10 +3795,67 @@ function backToRoleSelection() {
   resetProgress();
   resetReview();
   setJobIdInUrl(null);
+  // Deliberate reset back to New Intake, same as always - unlike the
+  // page-load bootstrap below, "back to role selection" does not restore
+  // whichever tab/case was open (that would defeat the point of backing
+  // out). Still clears the view/case URL params rather than leaving them
+  // stale, since intake is where this is headed.
+  setViewInUrl('intake');
   openRoleGate(revealIntakeForm);
 }
 
 backToRoleBtn.addEventListener('click', backToRoleSelection);
+
+// ADDED 2026-09-11. Restores whichever tab or detail panel was open
+// before a same-tab refresh, from the `view` (and, for the two detail
+// panels, `case`) query params switchToView()/loadAndShowCaseDetail()/
+// openReviewLogDetail() keep in the URL (see setViewInUrl() near
+// setJobIdInUrl() above). Only called from the page-load bootstrap right
+// below, never from backToRoleSelection()'s re-verification - that one is
+// an explicit reset, not a refresh, and should still land on New Intake.
+async function restoreViewFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+  if (!view) return;
+
+  // A `view` param at all means this load is either a refresh past the
+  // splash or a shared/bookmarked link straight into the app - either way,
+  // skip the splash the same way resumeJobFromUrl() does for a `job` param.
+  landingView.hidden = true;
+  appView.hidden = false;
+  markLandingDismissed();
+
+  if (view === 'intake') return; // already the default view, nothing more to do
+
+  if (view === 'casedetail' || view === 'reviewlogdetail') {
+    const caseId = params.get('case');
+    if (!caseId) return; // no case id to rebuild the panel from - stay on New Intake
+    try {
+      const entries = await fetchCaseHistory();
+      const entry = entries.find((e) => e.jobId === caseId);
+      // Entry gone (deleted/archived since) or a review-log link for a
+      // case that turns out to have no saved review record - either way,
+      // fall back to staying on New Intake rather than showing a broken
+      // half-populated panel.
+      if (!entry) return;
+      if (view === 'casedetail') {
+        loadAndShowCaseDetail(entry.jobId, entry);
+      } else if (entry.reviewRecord) {
+        openReviewLogDetail(entry);
+      }
+    } catch (err) {
+      console.error('view restore error', err);
+    }
+    return;
+  }
+
+  // Plain tabs (queue/pending/reports/settings) - switchToView() already
+  // guards against an unrecognized view name, and applyRoleRestrictions()
+  // (already run by the caller below) has already redirected to Case
+  // Queue if this role can't see the requested tab, so this can't
+  // override that with something the current role isn't allowed to see.
+  switchToView(view);
+}
 
 // The page-load role decision (see the note where openRoleGate() used to
 // be called, near the top). Runs before resumeJobFromUrl() below to keep
@@ -3721,15 +3863,21 @@ backToRoleBtn.addEventListener('click', backToRoleSelection);
 //
 // A restored session takes exactly the same two steps the verify-success
 // branch takes - applyRoleRestrictions() then revealIntakeForm() - rather
-// than reimplementing what "being verified" means. The landing view is
-// deliberately still shown either way; this only skips the gate, not the
-// app's front door.
+// than reimplementing what "being verified" means. restoreViewFromUrl()
+// then puts back whichever tab/case was actually open before the refresh
+// (see its own comment above) - UPDATED 2026-09-11: the landing view used
+// to be shown unconditionally at this point every time; it no longer is,
+// see wasLandingDismissed() near the top of this file.
 (function bootstrapRoleGate() {
   if (restoreRoleSession()) {
     applyRoleRestrictions();
     revealIntakeForm();
+    restoreViewFromUrl();
   } else {
-    openRoleGate(revealIntakeForm);
+    openRoleGate(() => {
+      revealIntakeForm();
+      restoreViewFromUrl();
+    });
   }
 })();
 
@@ -3743,6 +3891,7 @@ backToRoleBtn.addEventListener('click', backToRoleSelection);
 
   landingView.hidden = true;
   appView.hidden = false;
+  markLandingDismissed();
   setBusy(true);
   resultsPanel.hidden = true;
   errorPanel.hidden = true;
