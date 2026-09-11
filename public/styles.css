@@ -1833,6 +1833,62 @@ details summary {
   color: #ffffff;
 }
 
+/* "Clear old cases" (Case Queue toolbar) - ADDED 2026-09-11. Pushed to
+   the far right of .queue-toolbar's flex row when there's room; wraps
+   onto its own line below the search/filter pills otherwise, same as
+   every other child in that already-flex-wrap row. */
+.queue-clear-history {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.queue-clear-history[hidden] {
+  display: none;
+}
+
+/* Replaces the plain button (see wireQueueClearHistory() in app.js,
+   which toggles the two) rather than a native confirm() dialog - this
+   app never uses those (see the New Intake role gate, Screening Policy
+   Save/Discard, etc. - every confirmation here is its own inline UI). */
+.queue-clear-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.queue-clear-confirm[hidden] {
+  display: none;
+}
+
+.queue-clear-confirm-text {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+/* All three buttons here carry .btn, which is `display: block` and
+   `width: 100%` (it is the full-width primary action elsewhere, e.g.
+   New Intake's Run). Neither default suits a toolbar: they need to sit
+   inline in the flex row at their own content width. */
+.queue-clear-btn,
+.queue-clear-confirm-btn {
+  width: auto;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+}
+
+/* Same author-vs-UA-stylesheet [hidden] issue as .nav-item/.view-panel/
+   .reports-range-custom elsewhere in this file, and it bites harder here:
+   wireQueueClearHistory() hides this button to swap the confirm row in
+   its place, but .btn sets its own `display`, and an author rule beats
+   the UA's `[hidden] { display: none }` no matter the specificity - so
+   without this the plain "Clear old cases" button would stay on screen
+   right next to the confirmation that replaced it. */
+.queue-clear-btn[hidden] {
+  display: none;
+}
+
 /* ---------- Data tables (Case Queue) ---------- */
 
 .table-card {

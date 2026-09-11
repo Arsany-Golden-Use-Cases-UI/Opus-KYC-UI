@@ -171,6 +171,30 @@
           <div class="queue-toolbar">
             <input id="queue-search" type="search" class="queue-search-input" placeholder="Search applicant">
             <div id="queue-filter-buttons" class="filter-pill-row"></div>
+
+            <!-- "Clear old cases" - ADDED 2026-09-11. Permanently deletes
+                 case history from Redis, keeping only the 5 most recent
+                 entries - see DELETE /api/case-history in server.js.
+                 Compliance-Officer-only (hidden/shown alongside every
+                 other manager-only control by applyRoleRestrictions() in
+                 app.js - see queueClearHistoryWrap there), since this is
+                 compliance/audit history, same reasoning as Pending
+                 Reviews/Reports already being manager-only. Starts as a
+                 plain button; clicking it swaps in an inline confirm
+                 (#queue-clear-confirm) rather than a native browser
+                 confirm() dialog, matching this app's own custom-card
+                 style everywhere else - see wireQueueClearHistory() in
+                 app.js. Hidden by default here (both for the role gate
+                 above and so it never flashes visible before
+                 applyRoleRestrictions() runs on load). -->
+            <div id="queue-clear-history" class="queue-clear-history" hidden>
+              <button type="button" id="queue-clear-history-btn" class="btn btn-secondary queue-clear-btn">Clear old cases</button>
+              <div id="queue-clear-confirm" class="queue-clear-confirm" hidden>
+                <span id="queue-clear-confirm-text" class="queue-clear-confirm-text"></span>
+                <button type="button" id="queue-clear-confirm-yes" class="btn btn-primary queue-clear-confirm-btn">Yes, clear</button>
+                <button type="button" id="queue-clear-confirm-no" class="btn btn-secondary queue-clear-confirm-btn">Cancel</button>
+              </div>
+            </div>
           </div>
 
           <div class="card table-card">

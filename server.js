@@ -241,6 +241,58 @@ app.get('/api/case-history', async (req, res) => {
   res.json({ entries });
 });
 
+// Permanently trims case history down to the N most recent entries (by
+// submittedAt - same ordering GET /api/case-history above already
+// returns), discarding the rest. ADDED 2026-09-11, for the Case Queue's
+// "Clear old cases" control (public/app.js) - restricted to Compliance
+// Officer in the UI, but like every other route here there's no
+// server-side role check (see PUT /api/screening-policy's comment on
+// why - this has always been UI intent only, not real access control).
+// `keep` defaults to 5 (what the UI always sends) but stays a query
+// param rather than a hardcoded constant, in case that default ever
+// needs to change without a matching UI release.
+app.delete('/api/case-history', async (req, res) => {
+  try {
+    // Any non-positive or unparseable value falls back to the default
+    // rather than being honored: `parseInt('-3')` is -3, which is truthy,
+    // so a bare `|| 5` would let ?keep=-3 through to slice(0, 0) and wipe
+    // the whole store from a URL. Nothing here should ever be able to
+    // delete everything - "keep none" is not a mode this endpoint offers.
+    const requestedKeep = parseInt(req.query.keep, 10);
+    const keep = Number.isFinite(requestedKeep) && requestedKeep > 0 ? requestedKeep : 5;
+
+    const entries = (await loadHistory()).sort(
+      (a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)
+    );
+    const kept = entries.slice(0, keep);
+    const removed = entries.length - kept.length;
+
+    // Never write when there is nothing to remove. That is obviously
+    // right on its own (why rewrite an unchanged array?), but the real
+    // reason is loadHistory(): it catches a Redis read failure and
+    // returns [], so a transient outage would otherwise reach
+    // `saveHistory([])` here and permanently delete every case while
+    // replying {ok:true} - the one irreversible thing this endpoint must
+    // never do by accident. With this guard a failed read yields
+    // removed === 0 and writes nothing at all.
+    if (removed <= 0) {
+      return res.json({ ok: true, kept: kept.length, removed: 0 });
+    }
+
+    // Written straight through rather than via saveHistory(), which
+    // swallows write errors - same reasoning as saveScreeningPolicy()
+    // above: this is a user's explicit, irreversible action, and telling
+    // them "cleared" when nothing was actually written would be worse
+    // than surfacing the failure (the catch below turns it into a 500
+    // the UI already renders).
+    await redis.set(HISTORY_KEY, JSON.stringify(kept));
+    res.json({ ok: true, kept: kept.length, removed });
+  } catch (err) {
+    console.error('case history clear error', err);
+    res.status(500).json({ error: err.message || 'Failed to clear case history.' });
+  }
+});
+
 // Real (non-secret) connection info for the Settings tab - never the
 // service key itself, just whether one is set.
 app.get('/api/config', (req, res) => {

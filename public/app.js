@@ -398,6 +398,18 @@ function applyRoleRestrictions() {
     btn.hidden = !isRoleAllowed(btn);
   });
 
+  // "Clear old cases" (Case Queue) - Compliance-Officer-only, same
+  // reasoning as Pending Reviews/Reports below - see
+  // wireQueueClearHistory() near renderCaseTable() for the click
+  // handling itself. Reset back to its plain-button state on every role
+  // change (not just hidden for a KYC Agent) so a Compliance Officer who
+  // switched roles mid-confirmation never comes back to find it still
+  // sitting open.
+  if (queueClearHistoryWrap) {
+    queueClearHistoryWrap.hidden = currentRole !== 'manager';
+    resetQueueClearHistory();
+  }
+
   // Checked against the actual visible panel (not which nav-item carries
   // .active) because the standalone "review" panel has no nav item of its
   // own - relying on nav-item state would miss it entirely and leave it
@@ -2530,6 +2542,83 @@ async function renderCaseTable(tableWrapId, statsContainerId) {
 // Wired once at load - #queue-search is static markup, not rebuilt per
 // view switch, unlike the filter pills (which do need rebuilding, since
 // their active state depends on queueStatusFilter).
+// "Clear old cases" - ADDED 2026-09-11. Compliance-Officer-only (see
+// applyRoleRestrictions() above, which toggles queueClearHistoryWrap's
+// own `hidden` and calls resetQueueClearHistory() on every role change).
+// Permanently trims case history down to the 5 most recent entries via
+// DELETE /api/case-history - see that route in server.js. Uses an
+// inline confirm (queueClearConfirm swapped in for queueClearHistoryBtn)
+// rather than a native confirm() dialog, matching every other
+// confirmation in this app.
+const queueClearHistoryWrap = document.getElementById('queue-clear-history');
+const queueClearHistoryBtn = document.getElementById('queue-clear-history-btn');
+const queueClearConfirm = document.getElementById('queue-clear-confirm');
+const queueClearConfirmText = document.getElementById('queue-clear-confirm-text');
+const queueClearConfirmYesBtn = document.getElementById('queue-clear-confirm-yes');
+const queueClearConfirmNoBtn = document.getElementById('queue-clear-confirm-no');
+const QUEUE_CLEAR_KEEP_COUNT = 5;
+
+function resetQueueClearHistory() {
+  if (!queueClearHistoryBtn || !queueClearConfirm) return;
+  queueClearHistoryBtn.hidden = false;
+  queueClearHistoryBtn.disabled = false;
+  queueClearHistoryBtn.textContent = 'Clear old cases';
+  queueClearConfirm.hidden = true;
+  // The confirm row's own buttons need resetting too, not just the
+  // plain button that replaces it: the click handler below puts "Yes,
+  // clear" into a disabled "Clearing…" state and disables Cancel
+  // alongside it, and the success path comes straight back here. Without
+  // this, reopening the confirm after one successful clear showed a
+  // button still labelled "Clearing…" and a permanently disabled Cancel.
+  if (queueClearConfirmYesBtn) {
+    queueClearConfirmYesBtn.disabled = false;
+    queueClearConfirmYesBtn.textContent = 'Yes, clear';
+  }
+  if (queueClearConfirmNoBtn) queueClearConfirmNoBtn.disabled = false;
+}
+
+(function wireQueueClearHistory() {
+  if (!queueClearHistoryBtn || !queueClearConfirm || !queueClearConfirmYesBtn || !queueClearConfirmNoBtn) return;
+
+  queueClearHistoryBtn.addEventListener('click', () => {
+    const total = queueEntriesCache.length;
+    const removable = Math.max(0, total - QUEUE_CLEAR_KEEP_COUNT);
+    queueClearConfirmText.textContent = removable
+      ? `Permanently delete ${removable} case${removable === 1 ? '' : 's'}, keeping the ${QUEUE_CLEAR_KEEP_COUNT} most recent. This can't be undone.`
+      : `There are ${total} case${total === 1 ? '' : 's'} on file - nothing to clear yet.`;
+    queueClearHistoryBtn.hidden = true;
+    queueClearConfirm.hidden = false;
+    // Nothing to actually confirm if there's nothing removable - "Yes,
+    // clear" would just be a no-op round trip, so disable it rather than
+    // pretend there's a real action here.
+    queueClearConfirmYesBtn.disabled = !removable;
+  });
+
+  queueClearConfirmNoBtn.addEventListener('click', resetQueueClearHistory);
+
+  queueClearConfirmYesBtn.addEventListener('click', async () => {
+    queueClearConfirmYesBtn.disabled = true;
+    queueClearConfirmNoBtn.disabled = true;
+    queueClearConfirmYesBtn.textContent = 'Clearing…';
+    try {
+      const res = await fetch(`/api/case-history?keep=${QUEUE_CLEAR_KEEP_COUNT}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to clear case history.');
+      resetQueueClearHistory();
+      // Reflect the trimmed history immediately - same call the Case
+      // Queue tab itself makes on load, so stats/table/filters/search
+      // all reset together rather than being patched individually.
+      renderCaseTable('queue-table-wrap', 'queue-stats');
+    } catch (err) {
+      console.error('clear case history error', err);
+      queueClearConfirmText.textContent = err.message || 'Something went wrong clearing case history.';
+      queueClearConfirmYesBtn.disabled = false;
+      queueClearConfirmNoBtn.disabled = false;
+      queueClearConfirmYesBtn.textContent = 'Yes, clear';
+    }
+  });
+})();
+
 (function initQueueSearch() {
   const input = document.getElementById('queue-search');
   if (!input) return;
