@@ -785,6 +785,175 @@ async function uploadFile(file, kind) {
   return data.fileUrl;
 }
 
+// ---------------------------------------------------------------------
+// Sample scenarios (New Intake) - ADDED 2026-09-11. One click fills in
+// every af-* field above with a demo applicant, swaps in matching
+// specimen ID/Proof-of-Address PDFs (public/samples/*.pdf, generated
+// once and committed - not real user data), and leaves the Run button
+// for a person to press deliberately (this never auto-submits).
+//
+// The "clean" / "pep" split and the specific field values here aren't
+// guesses - they're built directly from the current
+// default-screening-policy.json risk_factor_catalog and decision_matrix:
+//   - CUST-001 "Politically Exposed Person (PEP)" is severity HIGH, and
+//     decision_matrix.HIGH_present explicitly names PEP as its example
+//     ("Any single HIGH factor -> REFER to compliance for EDD (e.g.
+//     PEP, ...)"). The "pep" scenario checks af-pep-self-declaration to
+//     land on exactly that factor.
+//   - The "clean" scenario is built to match only LOW-severity factors:
+//     GEO-004 (standard low-risk jurisdiction - UAE nationality/
+//     residency), OCC-003 (standard salaried occupation), PRD-001
+//     (standard retail current account), and no PEP/FATCA flags - i.e.
+//     decision_matrix.all_LOW_or_none.
+// That said, the actual screening decision is made by Opus at run time,
+// reasoning over whatever Screening Policy is currently saved below (it
+// may have been edited since this was written) - so the "Expected"
+// badges on the sample cards are a documented best guess, not a
+// guarantee. Worth a live run to confirm before relying on them for a
+// demo.
+const SAMPLE_SCENARIOS = {
+  clean: {
+    fields: {
+      'af-full-name': 'Ahmed Al Mazrouei',
+      'af-date-of-birth': '1988-03-14',
+      'af-nationality': 'United Arab Emirates',
+      'af-place-of-birth': 'Abu Dhabi, United Arab Emirates',
+      'af-sex': 'M',
+      'af-marital-status': 'Married',
+      'af-residency-status': 'UAE National',
+      'af-emirates-id-number': '784-1988-1234567-1',
+      'af-passport-number': 'N1234567',
+      'af-passport-country': 'United Arab Emirates',
+      'af-mobile': '+971-50-1234567',
+      'af-email': 'ahmed.almazrouei@example.com',
+      'af-address-line-1': 'Villa 12, Al Reem Street',
+      'af-address-line-2': '',
+      'af-address-city': 'Abu Dhabi',
+      'af-address-emirate': 'Abu Dhabi',
+      'af-address-country': 'United Arab Emirates',
+      'af-employment-status': 'Employed',
+      'af-employer': 'Etihad Airways',
+      'af-occupation': 'Software Engineer',
+      'af-industry': 'Aviation',
+      'af-monthly-income-aed': '25000',
+      'af-years-at-employer': '4',
+      'af-product-requested': 'Retail Current Account',
+      'af-source-of-funds': 'Salary',
+      'af-expected-monthly-deposits-aed': '20000',
+      'af-expected-transaction-volume': 'Low',
+      'af-branch': 'Abu Dhabi Main Branch',
+      'af-channel': 'Branch',
+      'af-tax-residency-countries': 'United Arab Emirates',
+    },
+    checks: {
+      'af-pep-self-declaration': false,
+      'af-us-person-for-fatca': false,
+    },
+    idDocumentUrl: '/samples/sample-clean-id.pdf',
+    idDocumentName: 'ahmed-al-mazrouei-id.pdf',
+    proofOfAddressUrl: '/samples/sample-clean-poa.pdf',
+    proofOfAddressName: 'ahmed-al-mazrouei-proof-of-address.pdf',
+    loadedMessage: 'Loaded: Clean UAE applicant. Review the fields below, then run.',
+  },
+  pep: {
+    fields: {
+      'af-full-name': 'Khalid bin Rashid Al Falasi',
+      'af-date-of-birth': '1975-11-02',
+      'af-nationality': 'United Arab Emirates',
+      'af-place-of-birth': 'Dubai, United Arab Emirates',
+      'af-sex': 'M',
+      'af-marital-status': 'Married',
+      'af-residency-status': 'UAE National',
+      'af-emirates-id-number': '784-1975-7654321-1',
+      'af-passport-number': 'N7654321',
+      'af-passport-country': 'United Arab Emirates',
+      'af-mobile': '+971-50-7654321',
+      'af-email': 'k.alfalasi@example.com',
+      'af-address-line-1': 'Villa 3, Emirates Hills',
+      'af-address-line-2': '',
+      'af-address-city': 'Dubai',
+      'af-address-emirate': 'Dubai',
+      'af-address-country': 'United Arab Emirates',
+      'af-employment-status': 'Employed',
+      'af-employer': 'Ministry of Finance',
+      'af-occupation': 'Senior Government Advisor',
+      'af-industry': 'Public Sector',
+      'af-monthly-income-aed': '90000',
+      'af-years-at-employer': '12',
+      'af-product-requested': 'Wealth Management Account',
+      'af-source-of-funds': 'Salary and investment income',
+      'af-expected-monthly-deposits-aed': '150000',
+      'af-expected-transaction-volume': 'High',
+      'af-branch': 'Dubai DIFC Branch',
+      'af-channel': 'Relationship Manager',
+      'af-tax-residency-countries': 'United Arab Emirates',
+    },
+    checks: {
+      'af-pep-self-declaration': true,
+      'af-us-person-for-fatca': false,
+    },
+    idDocumentUrl: '/samples/sample-pep-id.pdf',
+    idDocumentName: 'khalid-al-falasi-id.pdf',
+    proofOfAddressUrl: '/samples/sample-pep-poa.pdf',
+    proofOfAddressName: 'khalid-al-falasi-proof-of-address.pdf',
+    loadedMessage: 'Loaded: PEP self-declared. Review the fields below, then run.',
+  },
+};
+
+const sampleScenarioLoadedNote = document.getElementById('sample-scenario-loaded');
+
+// Builds a File from a same-origin static asset (public/samples/*.pdf,
+// served by express.static - see server.js) and assigns it to a file
+// <input> via DataTransfer, since a file input's .value can't be set
+// directly. Fires a 'change' event afterwards so anything that might
+// ever listen for it (nothing does today) sees the same event a real
+// pick would raise.
+async function loadSampleFile(inputEl, url, filename) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not load sample file: ${url}`);
+  const blob = await res.blob();
+  const file = new File([blob], filename, { type: 'application/pdf' });
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  inputEl.files = dt.files;
+  inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// Fills every field, then loads the two sample documents. Never submits
+// on its own - Run stays a deliberate, separate click, same as any other
+// case.
+async function applySampleScenario(key) {
+  const scenario = SAMPLE_SCENARIOS[key];
+  if (!scenario) return;
+
+  Object.entries(scenario.fields).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  Object.entries(scenario.checks).forEach(([id, checked]) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = checked;
+  });
+
+  if (sampleScenarioLoadedNote) sampleScenarioLoadedNote.textContent = 'Loading sample documents…';
+  try {
+    await Promise.all([
+      loadSampleFile(document.getElementById('id-document'), scenario.idDocumentUrl, scenario.idDocumentName),
+      loadSampleFile(document.getElementById('proof-of-address'), scenario.proofOfAddressUrl, scenario.proofOfAddressName),
+    ]);
+    if (sampleScenarioLoadedNote) sampleScenarioLoadedNote.textContent = scenario.loadedMessage;
+  } catch (err) {
+    console.error('sample scenario file load error', err);
+    if (sampleScenarioLoadedNote) {
+      sampleScenarioLoadedNote.textContent = 'Fields loaded, but sample documents failed to load - attach ID/Proof of Address manually.';
+    }
+  }
+}
+
+document.querySelectorAll('.sample-scenario-card').forEach((btn) => {
+  btn.addEventListener('click', () => applySampleScenario(btn.dataset.sample));
+});
+
 // Assembles the Application Form JSON from the structured intake fields
 // that replaced what used to be one raw textarea (see the af-* inputs in
 // index.html). Every key in the shape is written unconditionally from this

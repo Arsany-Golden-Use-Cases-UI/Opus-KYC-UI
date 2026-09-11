@@ -189,6 +189,52 @@
             <h1 class="card-title">Submit a Case</h1>
             <p class="subtitle">Upload documents and run the KYC screening workflow.</p>
 
+            <!-- Sample scenarios: one click fills in every field below (plus
+                 matching specimen ID/PoA files) so the workflow can be tried
+                 end-to-end without hand-typing an applicant. ADDED
+                 2026-09-11. Reuses the .policy-summary collapsed-card/
+                 <details> pattern from the Screening Policy editor further
+                 down, so this doesn't introduce a second visual language -
+                 same reasoning as that editor's own comment. Populated by
+                 applySampleScenario() in app.js from SAMPLE_SCENARIOS; the
+                 "Expected" badges reuse .badge.tone-green/.badge.tone-pink,
+                 the same LOW vs HIGH/PROHIBITED severity colors
+                 severityTone() already uses for risk factors in the policy
+                 editor - not new colors invented for this. These are
+                 labeled "Expected", not guaranteed: the actual decision is
+                 Opus's, made at run time against whatever Screening Policy
+                 is saved below - see applySampleScenario()'s own comment. -->
+            <details class="policy-summary sample-scenarios">
+              <summary class="policy-summary-header">
+                <div class="policy-summary-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l3 7-6 11L3 10l3-7 3 7" /></svg>
+                </div>
+                <div class="policy-summary-text">
+                  <div class="policy-summary-title">Sample scenarios</div>
+                  <div class="policy-summary-subtitle">Auto-fill a demo applicant (and matching sample documents) to try the workflow end-to-end</div>
+                </div>
+                <div class="policy-summary-toggle">
+                  <span class="policy-summary-toggle-label">View samples</span>
+                  <span class="policy-summary-chevron">⌄</span>
+                </div>
+              </summary>
+              <div class="policy-summary-body">
+                <div class="sample-scenario-grid">
+                  <button type="button" class="sample-scenario-card" id="sample-scenario-clean" data-sample="clean">
+                    <span class="sample-scenario-card-title">Clean UAE applicant</span>
+                    <span class="sample-scenario-card-desc">Standard salaried UAE national, standard retail account, no PEP/adverse-media flags. All factors LOW under the current policy.</span>
+                    <span class="badge tone-green">Expected: straight-through</span>
+                  </button>
+                  <button type="button" class="sample-scenario-card" id="sample-scenario-pep" data-sample="pep">
+                    <span class="sample-scenario-card-title">PEP self-declared</span>
+                    <span class="sample-scenario-card-desc">Otherwise-clean applicant who discloses Politically Exposed Person status - CUST-001, a HIGH severity factor under the current policy.</span>
+                    <span class="badge tone-pink">Expected: referred for review</span>
+                  </button>
+                </div>
+                <p class="sample-scenario-note" id="sample-scenario-loaded"></p>
+              </div>
+            </details>
+
             <form id="kyc-form">
               <div class="field">
                 <label for="id-document">ID Document</label>

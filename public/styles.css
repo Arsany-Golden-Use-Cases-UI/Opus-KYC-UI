@@ -2584,6 +2584,70 @@ details summary {
   gap: 0.8rem;
 }
 
+/* Sample scenario cards (New Intake, above the form) - ADDED 2026-09-11.
+   Sit inside the same .policy-summary-body as the policy editor's own
+   sections, so no extra top margin/heading is needed here; .badge.tone-*
+   on the card (tone-green / tone-pink) reuses the exact colors
+   severityTone() already assigns to LOW vs HIGH/PROHIBITED risk factors,
+   rather than inventing a third color meaning here. */
+.sample-scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 820px) {
+  .sample-scenario-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sample-scenario-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  background: var(--color-surface-muted);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sample-scenario-card:hover {
+  border-color: var(--color-blue);
+  background: var(--color-blue-tint);
+}
+
+.sample-scenario-card-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--color-text);
+}
+
+.sample-scenario-card-desc {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+/* Confirmation line under the cards once one has been clicked - see
+   applySampleScenario() in app.js. Empty (and collapses to no visible
+   space) until then. */
+.sample-scenario-note {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-blue);
+}
+
+.sample-scenario-note:empty {
+  display: none;
+}
+
 .factor-row {
   border: 1px solid var(--color-border);
   border-radius: 12px;
