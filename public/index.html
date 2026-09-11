@@ -179,7 +179,15 @@
         </section>
 
         <!-- ============== New Intake (the real, functional page) ============== -->
-        <section class="view-panel intake-wide" data-view-panel="intake">
+        <!-- RESTRUCTURED 2026-09-11 into a two-column layout - .intake-main
+             (everything that used to be the whole panel: the form card,
+             status/review/error/results panels, page footer) plus a new
+             .intake-sidebar for the Sample scenarios card, matching a
+             reference layout Arsany shared where a persistent right-hand
+             panel sits beside the main content instead of stacking above
+             it. See .intake-layout/.intake-sidebar in styles.css. -->
+        <section class="view-panel intake-layout" data-view-panel="intake">
+          <div class="intake-main">
           <!-- Hidden until a role is verified - see revealIntakeForm() /
                openRoleGate() in app.js. Not visible behind or before the
                role gate: it starts hidden in the markup itself, not just
@@ -188,52 +196,6 @@
             <p class="card-eyebrow">Banking KYC / New Intake</p>
             <h1 class="card-title">Submit a Case</h1>
             <p class="subtitle">Upload documents and run the KYC screening workflow.</p>
-
-            <!-- Sample scenarios: one click fills in every field below (plus
-                 matching specimen ID/PoA files) so the workflow can be tried
-                 end-to-end without hand-typing an applicant. ADDED
-                 2026-09-11. Reuses the .policy-summary collapsed-card/
-                 <details> pattern from the Screening Policy editor further
-                 down, so this doesn't introduce a second visual language -
-                 same reasoning as that editor's own comment. Populated by
-                 applySampleScenario() in app.js from SAMPLE_SCENARIOS; the
-                 "Expected" badges reuse .badge.tone-green/.badge.tone-pink,
-                 the same LOW vs HIGH/PROHIBITED severity colors
-                 severityTone() already uses for risk factors in the policy
-                 editor - not new colors invented for this. These are
-                 labeled "Expected", not guaranteed: the actual decision is
-                 Opus's, made at run time against whatever Screening Policy
-                 is saved below - see applySampleScenario()'s own comment. -->
-            <details class="policy-summary sample-scenarios">
-              <summary class="policy-summary-header">
-                <div class="policy-summary-icon">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l3 7-6 11L3 10l3-7 3 7" /></svg>
-                </div>
-                <div class="policy-summary-text">
-                  <div class="policy-summary-title">Sample scenarios</div>
-                  <div class="policy-summary-subtitle">Auto-fill a demo applicant (and matching sample documents) to try the workflow end-to-end</div>
-                </div>
-                <div class="policy-summary-toggle">
-                  <span class="policy-summary-toggle-label">View samples</span>
-                  <span class="policy-summary-chevron">⌄</span>
-                </div>
-              </summary>
-              <div class="policy-summary-body">
-                <div class="sample-scenario-grid">
-                  <button type="button" class="sample-scenario-card" id="sample-scenario-clean" data-sample="clean">
-                    <span class="sample-scenario-card-title">Clean UAE applicant</span>
-                    <span class="sample-scenario-card-desc">Standard salaried UAE national, standard retail account, no PEP/adverse-media flags. All factors LOW under the current policy.</span>
-                    <span class="badge tone-green">Expected: straight-through</span>
-                  </button>
-                  <button type="button" class="sample-scenario-card" id="sample-scenario-pep" data-sample="pep">
-                    <span class="sample-scenario-card-title">PEP self-declared</span>
-                    <span class="sample-scenario-card-desc">Otherwise-clean applicant who discloses Politically Exposed Person status - CUST-001, a HIGH severity factor under the current policy.</span>
-                    <span class="badge tone-pink">Expected: referred for review</span>
-                  </button>
-                </div>
-                <p class="sample-scenario-note" id="sample-scenario-loaded"></p>
-              </div>
-            </details>
 
             <form id="kyc-form">
               <div class="field">
@@ -590,6 +552,50 @@
               <img src="assets/appliedai-wordmark-black.png" alt="Applied AI">
             </span>
           </p>
+          </div>
+
+          <!-- Sample scenarios sidebar - ADDED 2026-09-11, moved here from
+               an inline collapsible strip above the form (Arsany asked for
+               it in the empty column to the right instead). Hidden/shown
+               in lockstep with #intake-form-card - see revealIntakeForm()/
+               backToRoleSelection() in app.js, both of which now also
+               toggle intakeSidebar.hidden. Sticky positioned so it stays
+               in view while the (much longer) form scrolls beside it - see
+               .intake-sidebar in styles.css. Always expanded here (no
+               <details> wrapper, unlike its previous inline placement):
+               once it's off to the side rather than pushing the form
+               down, there's no space-saving reason to collapse it. Same
+               SAMPLE_SCENARIOS data / applySampleScenario() in app.js as
+               before - only the markup around the two cards changed, not
+               the ids the JS reads (#sample-scenario-loaded, .sample-
+               scenario-card, data-sample). "Expected" badges reuse
+               .badge.tone-green/.badge.tone-pink, the same LOW vs HIGH/
+               PROHIBITED severity colors severityTone() already uses for
+               risk factors in the policy editor - not new colors invented
+               for this. These are labeled "Expected", not guaranteed: the
+               actual decision is Opus's, made at run time against
+               whatever Screening Policy is currently saved in the form -
+               see applySampleScenario()'s own comment in app.js. -->
+          <aside class="intake-sidebar" id="intake-sidebar" hidden>
+            <section class="card sample-scenarios-card">
+              <p class="card-eyebrow">Try it</p>
+              <h2 class="card-title sample-scenarios-title">Sample scenarios</h2>
+              <p class="subtitle">Auto-fill a demo applicant (and matching sample documents) to try the workflow end-to-end.</p>
+              <div class="sample-scenario-grid">
+                <button type="button" class="sample-scenario-card" id="sample-scenario-clean" data-sample="clean">
+                  <span class="sample-scenario-card-title">Clean UAE applicant</span>
+                  <span class="sample-scenario-card-desc">Standard salaried UAE national, standard retail account, no PEP/adverse-media flags. All factors LOW under the current policy.</span>
+                  <span class="badge tone-green">Expected: straight-through</span>
+                </button>
+                <button type="button" class="sample-scenario-card" id="sample-scenario-pep" data-sample="pep">
+                  <span class="sample-scenario-card-title">PEP self-declared</span>
+                  <span class="sample-scenario-card-desc">Otherwise-clean applicant who discloses Politically Exposed Person status - CUST-001, a HIGH severity factor under the current policy.</span>
+                  <span class="badge tone-pink">Expected: referred for review</span>
+                </button>
+              </div>
+              <p class="sample-scenario-note" id="sample-scenario-loaded"></p>
+            </section>
+          </aside>
         </section>
 
         <!-- ============== Human Review (standalone panel - no sidebar nav item

@@ -476,11 +476,18 @@ navItems.forEach((btn) => {
 });
 
 const intakeFormCard = document.getElementById('intake-form-card');
+// The Sample scenarios sidebar (New Intake) - ADDED 2026-09-11, hidden/
+// shown in lockstep with intakeFormCard itself (see revealIntakeForm()
+// right below and backToRoleSelection() further down) since it sits
+// beside the form as its own sibling element now, not inside the form
+// card - see .intake-sidebar in index.html/styles.css.
+const intakeSidebar = document.getElementById('intake-sidebar');
 
 // Revealed only once a role is verified - see the openRoleGate() calls at
 // load time and in backToRoleSelection() below.
 function revealIntakeForm() {
   intakeFormCard.hidden = false;
+  if (intakeSidebar) intakeSidebar.hidden = false;
   backToRoleBtn.hidden = false;
   // The saved screening policy this case will run against - the form
   // doesn't carry it (the server applies the one saved policy - see
@@ -4162,6 +4169,7 @@ function backToRoleSelection() {
   applyRoleRestrictions();
   setBusy(false);
   intakeFormCard.hidden = true;
+  if (intakeSidebar) intakeSidebar.hidden = true;
   backToRoleBtn.hidden = true;
   statusPanel.hidden = true;
   resultsPanel.hidden = true;

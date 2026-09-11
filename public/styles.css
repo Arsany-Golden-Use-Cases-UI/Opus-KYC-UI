@@ -706,21 +706,63 @@ img {
   display: none;
 }
 
-/* New Intake's form. Was 640px back when the Application Form was a single
-   raw JSON textarea, then 960px once it became labeled inputs in
-   two-across rows. Now that every section (Applicant Details, Contact
-   Details, Employment, Account & Compliance, Screening Policy) groups
-   fields three-across via .field-row-3, 960px left each cell cramped and
-   wasted the empty space either side at typical desktop widths - widened
-   to use most of .content's own 1180px cap while still leaving a visible
-   margin so the page doesn't feel edge-to-edge. Same dedicated,
-   independently-tunable class as .review-wide below rather than one
-   shared "wide" class, so either panel's width can change without moving
-   the other. */
-.intake-wide {
-  max-width: 1100px;
+/* New Intake's layout. Was a single centered column (.intake-wide, capped
+   at 1100px) until 2026-09-11, when the Sample scenarios card moved out
+   of the form into a persistent right-hand sidebar (a reference layout
+   Arsany shared) - .content is widened for this view the same way it
+   already is for Queue/Case Detail below, then split into a wide main
+   column (.intake-main: the form card, plus the status/review/error/
+   results panels and page footer that always lived alongside it) and a
+   narrower sidebar column (.intake-sidebar). Single column again below
+   1000px, same breakpoint .case-detail-columns already uses for the same
+   reason. */
+.content:has(> [data-view-panel="intake"]:not([hidden])) {
+  max-width: 1600px;
+}
+
+.intake-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
+  align-items: start;
+  max-width: 1500px;
   margin: 0 auto;
   width: 100%;
+}
+
+.intake-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+  /* Was .intake-wide's own cap (1100px) - kept so the form itself doesn't
+     stretch uncomfortably wide now that its column has more room, even
+     though the grid track above it could go wider. */
+  max-width: 1100px;
+  width: 100%;
+}
+
+@media (max-width: 1000px) {
+  .intake-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .intake-main {
+    max-width: 100%;
+  }
+}
+
+/* Stays in view while .intake-main (much taller: a long form plus
+   whichever status/result panel is showing) scrolls beside it. top offset
+   matches .content's own top padding (2rem) so the card lines up with
+   the form card beside it rather than floating higher. */
+.intake-sidebar {
+  position: sticky;
+  top: 2rem;
+}
+
+.sample-scenarios-title {
+  font-size: 1.1rem;
 }
 
 /* Human Review card: wider than New Intake's form (640px felt cramped,
@@ -2584,22 +2626,18 @@ details summary {
   gap: 0.8rem;
 }
 
-/* Sample scenario cards (New Intake, above the form) - ADDED 2026-09-11.
-   Sit inside the same .policy-summary-body as the policy editor's own
-   sections, so no extra top margin/heading is needed here; .badge.tone-*
-   on the card (tone-green / tone-pink) reuses the exact colors
-   severityTone() already assigns to LOW vs HIGH/PROHIBITED risk factors,
-   rather than inventing a third color meaning here. */
+/* Sample scenario cards - ADDED 2026-09-11, moved into .intake-sidebar
+   (styles.css above) 2026-09-11 from an inline strip above the form.
+   Single column now: the sidebar column itself is only ~320px
+   (.intake-layout above), too narrow for the two cards to sit
+   side-by-side the way they did in the old wider inline strip.
+   .badge.tone-* on each card (tone-green / tone-pink) reuses the exact
+   colors severityTone() already assigns to LOW vs HIGH/PROHIBITED risk
+   factors, rather than inventing a third color meaning here. */
 .sample-scenario-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
   gap: 1rem;
-}
-
-@media (max-width: 820px) {
-  .sample-scenario-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .sample-scenario-card {
