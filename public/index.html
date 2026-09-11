@@ -153,7 +153,22 @@
         <section class="view-panel" data-view-panel="queue" hidden>
           <p class="card-eyebrow">Banking KYC / Case Queue</p>
           <h1 class="page-title">Case queue</h1>
-          <p class="subtitle">Every case run through this console, most recent first.</p>
+          <!-- Refresh button - ADDED 2026-09-11, next to the subtitle
+               (Arsany pointed at this exact spot). Re-fetches case history
+               in place (see refreshQueueData() in app.js) instead of a
+               full page reload - a case run elsewhere can take a couple
+               minutes to show up here, and reloading the whole page just
+               to check felt heavier than it needed to be. Unlike
+               renderCaseTable() (used when the Case Queue tab is first
+               opened), this does NOT reset the search box or status
+               filter - a refresh updates the data under whatever view is
+               already set up, it doesn't throw that away. -->
+          <div class="queue-subtitle-row">
+            <p class="subtitle">Every case run through this console, most recent first.</p>
+            <button type="button" id="queue-refresh-btn" class="queue-refresh-btn" title="Refresh case queue" aria-label="Refresh case queue">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            </button>
+          </div>
 
           <div id="queue-stats" class="stat-tile-row"></div>
 

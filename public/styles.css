@@ -1793,6 +1793,64 @@ details summary {
   color: var(--color-text);
 }
 
+/* Case Queue's refresh button, next to the page subtitle - ADDED
+   2026-09-11. Wrapping the subtitle in its own row means it's no longer
+   a direct child of .view-panel, so the .view-panel > .subtitle
+   margin-bottom:0 override above doesn't reach it - same situation
+   Reports already solved for its own header row, fixed the same way
+   (.reports-header-row .subtitle below). */
+.queue-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.queue-subtitle-row .subtitle {
+  margin-bottom: 0;
+}
+
+.queue-refresh-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.queue-refresh-btn:hover {
+  border-color: var(--color-blue);
+  color: var(--color-blue);
+  background: var(--color-blue-tint);
+}
+
+.queue-refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Spins the icon while a refresh is in flight (see the click handler in
+   app.js, which adds/removes this class around the fetch) rather than
+   swapping in a separate spinner element - one less thing to lay out in
+   this small a button. */
+.queue-refresh-btn.is-spinning svg {
+  animation: queue-refresh-spin 0.7s linear infinite;
+}
+
+@keyframes queue-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .queue-toolbar {
   display: flex;
   align-items: center;

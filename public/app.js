@@ -2539,6 +2539,39 @@ async function renderCaseTable(tableWrapId, statsContainerId) {
   }
 }
 
+// Refresh button (Case Queue, next to the subtitle) - ADDED 2026-09-11.
+// Re-fetches case history in place, same data renderCaseTable() above
+// loads on first open - but deliberately does NOT reset queueSearchTerm/
+// queueStatusFilter or the search input's value the way that one does.
+// A manual refresh is "show me what's changed", not "start this tab
+// over" - a case run elsewhere can take a couple of minutes to show up,
+// and resetting whatever filter/search was already set up just to check
+// would be a worse experience than the full-page reload this button
+// exists to avoid.
+const queueRefreshBtn = document.getElementById('queue-refresh-btn');
+
+async function refreshQueueData() {
+  queueEntriesCache = await fetchCaseHistory();
+  renderQueueTableFromCache();
+  renderQueueOverview('queue-stats', 'queue-status-bar', 'queue-breakdown', queueEntriesCache);
+}
+
+if (queueRefreshBtn) {
+  queueRefreshBtn.addEventListener('click', async () => {
+    if (queueRefreshBtn.disabled) return;
+    queueRefreshBtn.disabled = true;
+    queueRefreshBtn.classList.add('is-spinning');
+    try {
+      await refreshQueueData();
+    } catch (err) {
+      console.error('queue refresh error', err);
+    } finally {
+      queueRefreshBtn.classList.remove('is-spinning');
+      queueRefreshBtn.disabled = false;
+    }
+  });
+}
+
 // Wired once at load - #queue-search is static markup, not rebuilt per
 // view switch, unlike the filter pills (which do need rebuilding, since
 // their active state depends on queueStatusFilter).
