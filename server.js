@@ -747,7 +747,9 @@ async function fetchInputLabels() {
 //   Exchange 2 (CALLBACK, us -> Opus, whenever the user submits the
 //   in-app review form): POST to the exact callback.url from exchange 1
 //   (never reconstructed), with header [callback.token_header]:
-//   callback.token, body { output_data: {<id>: {value, type}}, status }.
+//   callback.token, body { output_data: {<id>: <value>}, status } - the
+//   bare value per output id, no per-field type descriptor (UPDATED
+//   2026-09-17, see POST /api/run/:id/review for what this replaced).
 //   The token is single-use - a second submission for the same dispatch
 //   gets 401 from Opus.
 //
@@ -761,9 +763,10 @@ async function fetchInputLabels() {
 //         "Can Approve ?", variable_name: "...", description: "...",
 //         is_nullable: false }, ... }
 //
-//   Its per-field `type` is a BARE STRING ("bool"/"str"), which is NOT
-//   the shape the callback wants back - see typeFor() in POST
-//   /api/run/:id/review for the re-wrap and why.
+//   Its per-field `type` is a BARE STRING ("bool"/"str"). Since
+//   2026-09-17 the callback sends bare values with no type descriptor at
+//   all, so nothing reads this on the way back out - it is kept on the
+//   stored dispatch purely as a record of what the node declared.
 //
 //   inputs follows the same bare-string convention ({type: "str"|"file",
 //   value: ...}), keyed by the human-task node's own input variable ids.
@@ -867,46 +870,35 @@ app.post('/api/run/:id/review', async (req, res) => {
       return res.status(400).json({ error: 'canApprove must be true or false.' });
     }
 
-    const { callback, expectedOutputSchema } = dispatch;
+    const { callback } = dispatch;
 
-    // Takes the type NAME the dispatch declared for each field and wraps it
-    // in the nested form the callback body needs. The two are deliberately
-    // different shapes, CONFIRMED LIVE 2026-09-02 from a real dispatch:
+    // UPDATED 2026-09-17 at Arsany's direction: output_data now carries the
+    // BARE VALUE per output id, with no per-field type descriptor at all:
     //
-    //   dispatch expected_output_schema[varId].type  ->  "bool" (bare string)
-    //   callback output_data[varId].type             ->  {type: "bool", type_definition: null}
+    //   { "workflow_output_d43knd8rq": true,
+    //     "workflow_output_m7r06wbko": "..." }
     //
-    // API reference section 3.4 is emphatic that the off-platform callback
-    // uses the nested object convention and that carrying the bare-string
-    // convention over from /job/execute is a real, separately-proven
-    // failure - so the declared name is re-wrapped here rather than echoed
-    // straight through. An already-nested value (should Opus ever go back
-    // to sending one) passes through untouched. Falls back to a sensible
-    // guess only if a field is missing from the schema entirely - logged
-    // loudly, since that would mean our two hardcoded REVIEW_OUTPUT_VARS
-    // ids no longer match this dispatch's actual schema.
-    function typeFor(varId, fallbackTypeName) {
-      const declared = expectedOutputSchema && expectedOutputSchema[varId];
-      const declaredType = declared && declared.type;
-
-      if (declaredType && typeof declaredType === 'object') return declaredType;
-      if (typeof declaredType === 'string' && declaredType) {
-        return { type: declaredType, type_definition: null };
-      }
-
-      console.warn(`[hitl-callback] jobId=${jobId} no schema entry for ${varId} - using fallback type`, fallbackTypeName);
-      return { type: fallbackTypeName, type_definition: null };
-    }
-
+    // This replaces the previous { value, type: {type, type_definition} }
+    // wrapper (added 1482a19, 2026-09-04) and the typeFor() helper that
+    // built it, both now removed.
+    //
+    // Recorded here because it matters if this ever needs reverting: the
+    // wrapper form was NOT broken. Job 74834 (2026-09-09) ran a full HITL
+    // cycle on it and its KYC Human Task node came back with
+    // workflow_output_d43knd8rq = true (bool) and
+    // workflow_output_m7r06wbko = "Test" (str), so Opus accepted and
+    // unwrapped it correctly. This is a move to a new platform contract,
+    // not a fix for a failing one. If reviews start coming back null, the
+    // previous shape was:
+    //
+    //   [varId]: { value: <v>, type: { type: "bool", type_definition: null } }
+    //
+    // and dispatch.expectedOutputSchema still carries the per-field type
+    // names the dispatch declared ("bool"/"str"), should they be needed to
+    // rebuild it.
     const outputData = {
-      [REVIEW_OUTPUT_VARS.canApprove]: {
-        value: canApprove,
-        type: typeFor(REVIEW_OUTPUT_VARS.canApprove, 'bool'),
-      },
-      [REVIEW_OUTPUT_VARS.comments]: {
-        value: comments || '',
-        type: typeFor(REVIEW_OUTPUT_VARS.comments, 'str'),
-      },
+      [REVIEW_OUTPUT_VARS.canApprove]: canApprove,
+      [REVIEW_OUTPUT_VARS.comments]: comments || '',
     };
 
     const tokenHeader = callback.token_header || 'X-Opus-Callback-Token';
